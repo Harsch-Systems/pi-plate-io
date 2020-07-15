@@ -3,7 +3,7 @@
 
 void main(){
 	struct piplate plate = { };
-	pi_plate_init(&plate, "DAQC", 2);
+	pi_plate_init(&plate, "DAQC", 3);
 
 	printf("value: %d\n", getADDR(&plate));
 }

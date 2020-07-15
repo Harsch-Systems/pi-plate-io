@@ -80,17 +80,13 @@ static char* sendCMD(struct piplate* plate, unsigned char cmd, unsigned char p1,
 	fclose(fp);
 
 	if(m.state){
-		if(bytesToReturn){
-			int size = bytesToReturn > 0 ? bytesToReturn : BUF_SIZE;
-			static char r[BUF_SIZE];
-			for(int i = 0; i < size; i ++){
-				r[i] = m.rBuf[i];
-			}
-			return r;
+		int size = bytesToReturn >= 0 ? bytesToReturn : BUF_SIZE;
+		static char r[BUF_SIZE];
+		for(int i = 0; i < size; i ++){
+			r[i] = m.rBuf[i];
 		}
-		return NULL;
+		return r;
 	}
-	printf("An Error Occured\n");
 	return NULL;
 }
 
@@ -100,8 +96,8 @@ bool pi_plate_init(struct piplate* plate, char* id, char addr){
 		plate->addr = addr;
 		plate->mapped_addr = getBaseAddr(id) + addr;
 		plate->ack = useACK(id);
-		if(sendCMD(plate, 0, 0, 0, 1)[0] == plate->mapped_addr){
-			plate->isValid = 1;
+		plate->isValid = 1;
+		if(getADDR(plate) == plate->mapped_addr){
 			return 0;
 		}
 	}
@@ -112,8 +108,11 @@ bool pi_plate_init(struct piplate* plate, char* id, char addr){
 /* Start of commands: */
 
 char getADDR(struct piplate* plate){
-	if(plate->isValid)
-		return sendCMD(plate, 0x00, 0, 0, 1)[0];
+	if(plate->isValid){
+		char* resp = sendCMD(plate, 0x00, 0, 0, 1);
+		if(resp)
+			return resp[0] - getBaseAddr(plate->id);
+	}
 	return INVAL_CMD;
 }
 
@@ -124,14 +123,20 @@ char* getID(struct piplate* plate){
 }
 
 char getHWrev(struct piplate* plate){
-	if(plate->isValid)
-		return sendCMD(plate, 0x02, 0, 0, 1)[0];
+	if(plate->isValid){
+		char* resp = sendCMD(plate, 0x02, 0, 0, 1);
+		if(resp)
+			return resp[0];
+	}
 	return INVAL_CMD;
 }
 
 char getFWrev(struct piplate* plate){
-	if(plate->isValid)
-		return sendCMD(plate, 0x03, 0, 0, 1)[0];
+	if(plate->isValid){
+		char* resp = sendCMD(plate, 0x03, 0, 0, 1);
+		if(resp)
+			return resp[0];
+	}
 	return INVAL_CMD;
 }
 
@@ -146,26 +151,35 @@ void intDisable(struct piplate* plate){
 }
 
 char getINTflags(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 3, "DAQC", "DAQC2", "THERMO"))
-		return sendCMD(plate, 0x06, 0, 0, 1)[0];
+	if(plate->isValid && strEquals(plate->id, 3, "DAQC", "DAQC2", "THERMO")){
+		char* resp = sendCMD(plate, 0x06, 0, 0, 1);
+		if(resp)
+			return resp[0];
+	}
 	return INVAL_CMD;
 }
 
 char getINTflag0(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 1, "MOTOR"))
-		return sendCMD(plate, 0x06, 0, 0, 1)[0];
+	if(plate->isValid && strEquals(plate->id, 1, "MOTOR")){
+		char* resp = sendCMD(plate, 0x06, 0, 0, 1);
+		if(resp)
+			return resp[0];
+	}
 	return INVAL_CMD;
 }
 
 char getINTflag1(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 1, "MOTOR"))
-		return sendCMD(plate, 0x07, 0, 0, 1)[0];
+	if(plate->isValid && strEquals(plate->id, 1, "MOTOR")){
+		char *resp = sendCMD(plate, 0x07, 0, 0, 1);
+		if(resp)
+			return resp[0];
+	}
 	return INVAL_CMD;
 }
 
 void reset(struct piplate* plate){
 	if(plate->isValid)
-		sendCMD(plate, 0x0F, 0, 0, 0)[0];
+		sendCMD(plate, 0x0F, 0, 0, 0);
 }
 
 /* End of commands */
