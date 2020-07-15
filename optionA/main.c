@@ -2,5 +2,5 @@
 #include "plateio.h"
 
 void main(){
-	printf("Value: %d\n", getINTflags("DAQC2", 4));
+	printf("value: %d\n", getINTflags("DAQC2", 4));
 }
