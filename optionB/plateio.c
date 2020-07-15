@@ -17,6 +17,12 @@
 
 static bool strEquals(char*, int, ...);
 
+int safeExtract(char* buf){
+	if(buf)
+		return buf[0];
+	return INVAL_CMD;
+}
+
 char getBaseAddr(char* id){
 	if(!strcmp(id, "DAQC"))
 		return DAQC_BASE_ADDR;
@@ -109,9 +115,8 @@ bool pi_plate_init(struct piplate* plate, char* id, char addr){
 
 int getADDR(struct piplate* plate){
 	if(plate->isValid){
-		char* resp = sendCMD(plate, 0x00, 0, 0, 1);
-		if(resp)
-			return resp[0] - getBaseAddr(plate->id);
+		int resp = safeExtract(sendCMD(plate, 0x00, 0, 0, 1));
+		return (resp > 0 ? resp - getBaseAddr(plate->id) : resp);
 	}
 	return INVAL_CMD;
 }
@@ -123,20 +128,14 @@ char* getID(struct piplate* plate){
 }
 
 int getHWrev(struct piplate* plate){
-	if(plate->isValid){
-		char* resp = sendCMD(plate, 0x02, 0, 0, 1);
-		if(resp)
-			return resp[0];
-	}
+	if(plate->isValid)
+		return safeExtract(sendCMD(plate, 0x02, 0, 0, 1));
 	return INVAL_CMD;
 }
 
 int getFWrev(struct piplate* plate){
-	if(plate->isValid){
-		char* resp = sendCMD(plate, 0x03, 0, 0, 1);
-		if(resp)
-			return resp[0];
-	}
+	if(plate->isValid)
+		return safeExtract(sendCMD(plate, 0x03, 0, 0, 1));
 	return INVAL_CMD;
 }
 
@@ -151,29 +150,20 @@ void intDisable(struct piplate* plate){
 }
 
 int getINTflags(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 3, "DAQC", "DAQC2", "THERMO")){
-		char* resp = sendCMD(plate, 0x06, 0, 0, 1);
-		if(resp)
-			return resp[0];
-	}
+	if(plate->isValid && strEquals(plate->id, 3, "DAQC", "DAQC2", "THERMO"))
+		return safeExtract(sendCMD(plate, 0x06, 0, 0, 1));
 	return INVAL_CMD;
 }
 
 int getINTflag0(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 1, "MOTOR")){
-		char* resp = sendCMD(plate, 0x06, 0, 0, 1);
-		if(resp)
-			return resp[0];
-	}
+	if(plate->isValid && strEquals(plate->id, 1, "MOTOR"))
+		return safeExtract(sendCMD(plate, 0x06, 0, 0, 1));
 	return INVAL_CMD;
 }
 
 int getINTflag1(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 1, "MOTOR")){
-		char *resp = sendCMD(plate, 0x07, 0, 0, 1);
-		if(resp)
-			return resp[0];
-	}
+	if(plate->isValid && strEquals(plate->id, 1, "MOTOR"))
+		return safeExtract(sendCMD(plate, 0x07, 0, 0, 1));
 	return INVAL_CMD;
 }
 
@@ -231,20 +221,63 @@ void relayALL(struct piplate* plate, char relays){
 int relaySTATE(struct piplate* plate, char relay){
 	if(plate->isValid){
 		if(strEquals(plate->id, 1, "RELAY")){
-			if(relay >= 1 && relay <= 7){
-				char* resp = sendCMD(plate, 0x14, 0, 0, 1);
-				if(resp)
-					return (resp[0] & (0x01 << (relay - 1))) >> (relay - 1);
-			}
+			if(relay >= 1 && relay <= 7)
+				return safeExtract(sendCMD(plate, 0x14, 0, 0, 1));
 		}else if(strEquals(plate->id, 1, "TINKER")){
-			if(relay >= 1 && relay <= 2){
-				char* resp = sendCMD(plate, 0x14, relay, 0, 0);
-				if(resp)
-					return resp[0];
-			}
+			if(relay >= 1 && relay <= 2)
+				return safeExtract(sendCMD(plate, 0x14, relay, 0, 0));
 		}
 	}
 	return INVAL_CMD;
 }
 
-/* End of realy commands */
+/* End of relay commands */
+
+/* Start of digital output commands */
+
+void setDOUTbit(struct piplate* plate, char bit){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "DAQC")){
+			if(bit >= 0 && bit <= 6)
+				sendCMD(plate, 0x10, bit, 0, 0);
+		}else if(strEquals(plate->id, 1, "DAQC2")){
+			if(bit >= 0 && bit <= 7)
+				sendCMD(plate, 0x10, bit, 0, 0);
+		}else if(strEquals(plate->id, 1, "TINKER")){
+			if(bit >= 1 && bit <= 8)
+				sendCMD(plate, 0x26, bit - 1, 0, 0);
+		}
+	}
+}
+
+void clrDOUTbit(struct piplate* plate, char bit){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "DAQC")){
+			if(bit >= 0 && bit <= 6)
+				sendCMD(plate, 0x11, bit, 0, 0);
+		}else if(strEquals(plate->id, 1, "DAQC2")){
+			if(bit >= 0 && bit <= 7)
+				sendCMD(plate, 0x11, bit, 0, 0);
+		}else if(strEquals(plate->id, 1, "TINKER")){
+			if(bit >= 1 && bit <= 8)
+				sendCMD(plate, 0x27, bit - 1, 0, 0);
+		}
+	}
+}
+
+void toggleDOUTbit(struct piplate* plate, char bit){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "DAQC")){
+			if(bit >= 0 && bit <= 6)
+				sendCMD(plate, 0x12, bit, 0, 0);
+		}else if(strEquals(plate->id, 1, "DAQC2")){
+			if(bit >= 0 && bit <= 7)
+				sendCMD(plate, 0x12, bit, 0, 0);
+		}else if(strEquals(plate->id, 1, "TINKER")){
+			if(bit >= 1 && bit <= 8)
+				sendCMD(plate, 0x28, bit - 1, 0, 0);
+		}
+	}
+}
+
+/* End of digital output commands */

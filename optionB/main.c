@@ -3,9 +3,9 @@
 
 void main(){
 	struct piplate plate = { };
-	pi_plate_init(&plate, "RELAY", 0);
+	pi_plate_init(&plate, "DAQC", 1);
 
-	relayTOGGLE(&plate, 4);
+	setDOUTbit(&plate, 1);
 
-	printf("value: %d\n", relaySTATE(&plate, 4));
+	//printf("id: %s\n", getID(&plate));
 }

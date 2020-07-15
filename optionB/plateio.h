@@ -29,4 +29,4 @@ extern void	setDOUTbit(struct piplate*, char);
 extern void	clrDOUTbit(struct piplate*, char);
 extern void	toggleDOUTbit(struct piplate*, char);
 extern void	setDOUTall(struct piplate*, char);
-extern int	getDOUTbyte(struct piplate*, char);
+extern int	getDOUTall(struct piplate*, char);
