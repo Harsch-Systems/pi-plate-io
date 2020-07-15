@@ -10,25 +10,23 @@ struct piplate {
 };
 
 extern bool	pi_plate_init(struct piplate*, char*, char);
-extern char	getADDR(struct piplate*);
+extern int	getADDR(struct piplate*);
 extern char*	getID(struct piplate*);
-extern char	getHWrev(struct piplate*);
-extern char	getFWrev(struct piplate*);
+extern int	getHWrev(struct piplate*);
+extern int	getFWrev(struct piplate*);
 extern void	intEnable(struct piplate*);//0x04
 extern void	intDisable(struct piplate*);//0x05
-extern char	getINTflags(struct piplate*);//0x06
-extern char	getINTflag0(struct piplate*);
-extern char	getINTflag1(struct piplate*);
+extern int	getINTflags(struct piplate*);//0x06
+extern int	getINTflag0(struct piplate*);
+extern int	getINTflag1(struct piplate*);
 extern void	reset(struct piplate*);
-/*
-extern void	relayON(char*, char, char);
-extern void	relayOFF(char*, char, char);
-extern void	relayTOGGLE(char*, char, char);
-extern void	relayALL(char*, char, char);
-extern char	relaySTATE(char*, char);
-extern void	setDOUTbit(char*, char, char);
-extern void	clrDOUTbit(char*, char, char);
-extern void	toggleDOUTbit(char*, char, char);
-extern void	setDOUTall(char*, char, char);
-extern char	getDOUTbyte(char*, char);
-*/
+extern void	relayON(struct piplate*, char);
+extern void	relayOFF(struct piplate*, char);
+extern void	relayTOGGLE(struct piplate*, char);
+extern void	relayALL(struct piplate*, char);
+extern int	relaySTATE(struct piplate*, char);
+extern void	setDOUTbit(struct piplate*, char);
+extern void	clrDOUTbit(struct piplate*, char);
+extern void	toggleDOUTbit(struct piplate*, char);
+extern void	setDOUTall(struct piplate*, char);
+extern int	getDOUTbyte(struct piplate*, char);

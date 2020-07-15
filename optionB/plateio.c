@@ -80,9 +80,10 @@ static char* sendCMD(struct piplate* plate, unsigned char cmd, unsigned char p1,
 	fclose(fp);
 
 	if(m.state){
+		int i;
 		int size = bytesToReturn >= 0 ? bytesToReturn : BUF_SIZE;
 		static char r[BUF_SIZE];
-		for(int i = 0; i < size; i ++){
+		for(i = 0; i < size; i ++){
 			r[i] = m.rBuf[i];
 		}
 		return r;
@@ -97,17 +98,16 @@ bool pi_plate_init(struct piplate* plate, char* id, char addr){
 		plate->mapped_addr = getBaseAddr(id) + addr;
 		plate->ack = useACK(id);
 		plate->isValid = 1;
-		if(getADDR(plate) == plate->mapped_addr){
+		if(getADDR(plate) == plate->addr)
 			return 0;
-		}
 	}
 	plate->isValid = 0;
 	return 1;
 }
 
-/* Start of commands: */
+/* Start of system commands: */
 
-char getADDR(struct piplate* plate){
+int getADDR(struct piplate* plate){
 	if(plate->isValid){
 		char* resp = sendCMD(plate, 0x00, 0, 0, 1);
 		if(resp)
@@ -122,7 +122,7 @@ char* getID(struct piplate* plate){
 	return NULL;
 }
 
-char getHWrev(struct piplate* plate){
+int getHWrev(struct piplate* plate){
 	if(plate->isValid){
 		char* resp = sendCMD(plate, 0x02, 0, 0, 1);
 		if(resp)
@@ -131,7 +131,7 @@ char getHWrev(struct piplate* plate){
 	return INVAL_CMD;
 }
 
-char getFWrev(struct piplate* plate){
+int getFWrev(struct piplate* plate){
 	if(plate->isValid){
 		char* resp = sendCMD(plate, 0x03, 0, 0, 1);
 		if(resp)
@@ -150,7 +150,7 @@ void intDisable(struct piplate* plate){
 		sendCMD(plate, 0x05, 0, 0, 0);
 }
 
-char getINTflags(struct piplate* plate){
+int getINTflags(struct piplate* plate){
 	if(plate->isValid && strEquals(plate->id, 3, "DAQC", "DAQC2", "THERMO")){
 		char* resp = sendCMD(plate, 0x06, 0, 0, 1);
 		if(resp)
@@ -159,7 +159,7 @@ char getINTflags(struct piplate* plate){
 	return INVAL_CMD;
 }
 
-char getINTflag0(struct piplate* plate){
+int getINTflag0(struct piplate* plate){
 	if(plate->isValid && strEquals(plate->id, 1, "MOTOR")){
 		char* resp = sendCMD(plate, 0x06, 0, 0, 1);
 		if(resp)
@@ -168,7 +168,7 @@ char getINTflag0(struct piplate* plate){
 	return INVAL_CMD;
 }
 
-char getINTflag1(struct piplate* plate){
+int getINTflag1(struct piplate* plate){
 	if(plate->isValid && strEquals(plate->id, 1, "MOTOR")){
 		char *resp = sendCMD(plate, 0x07, 0, 0, 1);
 		if(resp)
@@ -182,5 +182,69 @@ void reset(struct piplate* plate){
 		sendCMD(plate, 0x0F, 0, 0, 0);
 }
 
-/* End of commands */
+/* End of system commands */
 
+/* Start of relay commands */
+
+void relayON(struct piplate* plate, char relay){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "RELAY") && relay >= 1 && relay <=7){
+			sendCMD(plate, 0x10, relay, 0, 0);
+		}else if(strEquals(plate->id, 1, "TINKER") && relay >= 1 && relay <= 2){
+			sendCMD(plate, 0x10, relay - 1, 0, 0);
+		}
+	}
+}
+
+void relayOFF(struct piplate* plate, char relay){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "RELAY") && relay >= 1 && relay <= 7){
+			sendCMD(plate, 0x11, relay, 0, 0);
+		}else if(strEquals(plate->id, 1, "TINKER") && relay >=1 && relay <= 2){
+			sendCMD(plate, 0x11, relay - 1, 0, 0);
+		}
+	}
+}
+
+void relayTOGGLE(struct piplate* plate, char relay){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "RELAY") && relay >= 1 && relay <= 7){
+			sendCMD(plate, 0x12, relay, 0, 0);
+		}else if(strEquals(plate->id, 1, "TINKER") && relay >= 1 && relay <= 2){
+			sendCMD(plate, 0x12, relay - 1, 0, 0);
+		}
+	}
+}
+
+void relayALL(struct piplate* plate, char relays){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "RELAY")){
+			if(relays >= 0 && relays <= 127)
+				sendCMD(plate, 0x13, relays, 0, 0);
+		}else if(strEquals(plate->id, 1, "TINKER")){
+			if(relays >= 0 && relays <= 3)
+				sendCMD(plate, 0x13, relays, 0, 0);
+		}
+	}
+}
+
+int relaySTATE(struct piplate* plate, char relay){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "RELAY")){
+			if(relay >= 1 && relay <= 7){
+				char* resp = sendCMD(plate, 0x14, 0, 0, 1);
+				if(resp)
+					return (resp[0] & (0x01 << (relay - 1))) >> (relay - 1);
+			}
+		}else if(strEquals(plate->id, 1, "TINKER")){
+			if(relay >= 1 && relay <= 2){
+				char* resp = sendCMD(plate, 0x14, relay, 0, 0);
+				if(resp)
+					return resp[0];
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+/* End of realy commands */
