@@ -13,7 +13,7 @@
 #define THERMO_BASE_ADDR 40
 #define TINKER_BASE_ADDR 48
 
-#define INVAL_ID -1
+#define INVAL_CMD -1
 
 char getBaseAddr(char* id){
 	if(!strcmp(id, "DAQC"))
@@ -75,7 +75,7 @@ static char* sendCMD(unsigned char addr, unsigned char cmd, unsigned char p1, un
 char getADDR(char* id, char addr){
 	if(isValid(id))
 		return sendCMD(addr, 0x00, 0, 0, 1, id)[0];
-	return INVAL_ID;
+	return INVAL_CMD;
 }
 
 char* getID(char* id, char addr){
@@ -87,13 +87,13 @@ char* getID(char* id, char addr){
 char getHWrev(char* id, char addr){
 	if(isValid(id))
 		return sendCMD(addr, 0x02, 0, 0, 1, id)[0];
-	return INVAL_ID;
+	return INVAL_CMD;
 }
 
 char getFWrev(char* id, char addr){
 	if(isValid(id))
 		return sendCMD(addr, 0x03, 0, 0, 1, id)[0];
-	return INVAL_ID;
+	return INVAL_CMD;
 }
 
 void intEnable(char* id, char addr){
@@ -108,12 +108,28 @@ void intDisable(char* id, char addr){
 	}
 }
 
-char* getINTflags(char* id, char addr){
+char getINTflags(char* id, char addr){
 	if(!strcmp(id, "DAQC") || !strcmp(id, "DAQC2") || !strcmp(id, "THERMO")){
-
-	}else if(!strcmp(id, "THERMO")){
-		static char r[2];
+		return sendCMD(addr, 0x06, 0, 0, 1, id)[0];
+	}else{
+		return INVAL_CMD;
 	}
+}
+
+char getINTflag0(char* id, char addr){
+	if(!strcmp(id, "MOTOR"))
+		return sendCMD(addr, 0x06, 0, 0, 1, id)[0];
+	return INVAL_CMD;
+}
+
+char getINTflag1(char* id, char addr){
+	if(!strcmp(id, "MOTOR"))
+		return sendCMD(addr, 0x07, 0, 0, 1, id)[0];
+	return INVAL_CMD;
+}
+
+void reset(char* id, char addr){
+	sendCMD(addr, 0x0F, 0, 0, 0, id)[0];
 }
 
 /* End of commands */
