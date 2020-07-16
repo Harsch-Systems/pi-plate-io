@@ -1,15 +1,23 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
+#define DAQC 8
+#define MOTOR 16
+#define RELAY 24
+#define DAQC2 32
+#define THERMO 40
+#define TINKER 48
+
 struct piplate {
-	char* id;
+	char id;
 	char addr;
 	char mapped_addr;
 	bool isValid;
 	bool ack;
 };
 
-extern bool	pi_plate_init(struct piplate*, char*, char);
+extern struct piplate	pi_plate_init(char, char);
+
 extern int	getADDR(struct piplate*);
 extern char*	getID(struct piplate*);
 extern int	getHWrev(struct piplate*);
@@ -39,3 +47,17 @@ extern int	getDINbit(struct piplate*, char);
 extern int	getDINall(struct piplate*);
 extern void	enableDINint(struct piplate*, char, char);
 extern void	disableDINint(struct piplate*, char);
+
+extern int	CalGetByte(struct piplate*, char);//DAQC2, THERMO
+extern void	CalPutByte(struct piplate*, char);
+extern void	CalEraseBlock(struct piplate*);
+
+extern void	startOSC(struct piplate*);
+extern void	stopOSC(struct piplate*);
+extern void	setOSCchannel(struct piplate*, char, char);
+extern void	setOSCsweep(struct piplate*, char);
+extern void	getOSCtraces(struct piplate*);
+extern void	setOSCtrigger(struct piplate*, char, char*, char*, int);
+extern void	trigOSCnow(struct piplate*);
+extern void	runOSC(struct piplate*);
+

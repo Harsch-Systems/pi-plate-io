@@ -6,19 +6,12 @@
 #include "../../pi-plate-module/module/piplate.h"
 #include "plateio.h"
 
-#define DAQC_BASE_ADDR 8
-#define MOTOR_BASE_ADDR 16
-#define RELAY_BASE_ADDR 24
-#define DAQC2_BASE_ADDR 32
-#define THERMO_BASE_ADDR 40
-#define TINKER_BASE_ADDR 48
-
 #define INVAL_CMD -1
 
 const char* modes[9] = {"din", "dout", "button", "pwm", "range", "temp", "servo", "rgbled", "motion"};
 const bool pcaRequired[9] = {0, 0, 0, 1, 0, 0, 0, 0, 0};
 
-static bool strEquals(char*, int, ...);
+static bool compareWith(int, int, ...);
 
 int safeExtract(char* buf){
 	if(buf)
@@ -26,45 +19,28 @@ int safeExtract(char* buf){
 	return INVAL_CMD;
 }
 
-char getBaseAddr(char* id){
-	if(!strcmp(id, "DAQC"))
-		return DAQC_BASE_ADDR;
-	else if(!strcmp(id, "MOTOR"))
-		return MOTOR_BASE_ADDR;
-	else if(!strcmp(id, "RELAY"))
-		return RELAY_BASE_ADDR;
-	else if(!strcmp(id, "DAQC2"))
-		return DAQC2_BASE_ADDR;
-	else if(!strcmp(id, "THERMO"))
-		return THERMO_BASE_ADDR;
-	else if(!strcmp(id, "TINKER"))
-		return TINKER_BASE_ADDR;
-	else
-		return 0;
+static bool useACK(char id){
+	return compareWith(id, 3, DAQC2, THERMO, TINKER);
 }
 
-static bool useACK(char* id){
-	return strEquals(id, 3, "DAQ2", "THERMO", "TINKER");
+static bool isValid(char id, char addr){
+	return (addr >= 0 && addr <= 7) && compareWith(id, 6, DAQC2, THERMO, TINKER, DAQC, RELAY, MOTOR);
 }
 
-static bool isValid(char* id, char addr){
-	return (addr >= 0 && addr <= 7) && strEquals(id, 6, "DAQC2", "THERMO", "TINKER", "DAQC", "RELAY", "MOTOR");
-}
-
-static bool strEquals(char* id, int num, ...){
-	va_list strings;
+static bool compareWith(int id, int num, ...){
+	va_list values;
 	int i;
 
-	va_start(strings, num);
+	va_start(values, num);
 
 	for(i = 0; i < num; i++){
-		char* s = va_arg(strings, char*);
-		if(!strcmp(id, s)){
-			va_end(strings);
+		int v = va_arg(values, int);
+		if(id == v){
+			va_end(values);
 			return 1;
 		}
 	}
-	va_end(strings);
+	va_end(values);
 	return 0;
 }
 
@@ -100,18 +76,19 @@ static char* sendCMD(struct piplate* plate, unsigned char cmd, unsigned char p1,
 	return NULL;
 }
 
-bool pi_plate_init(struct piplate* plate, char* id, char addr){
+struct piplate pi_plate_init(char id, char addr){
+	struct piplate plate = { };
 	if(isValid(id, addr)){
-		plate->id = id;
-		plate->addr = addr;
-		plate->mapped_addr = getBaseAddr(id) + addr;
-		plate->ack = useACK(id);
-		plate->isValid = 1;
-		if(getADDR(plate) == plate->addr)
-			return 0;
+		plate.id = id;
+		plate.addr = addr;
+		plate.mapped_addr = id + addr;
+		plate.ack = useACK(id);
+		plate.isValid = 1;
+		if(getADDR(&plate) == plate.addr)
+			return plate;
 	}
-	plate->isValid = 0;
-	return 1;
+	plate.isValid = 0;
+	return plate;
 }
 
 /* Start of system commands: */
@@ -119,7 +96,7 @@ bool pi_plate_init(struct piplate* plate, char* id, char addr){
 int getADDR(struct piplate* plate){
 	if(plate->isValid){
 		int resp = safeExtract(sendCMD(plate, 0x00, 0, 0, 1));
-		return (resp > 0 ? resp - getBaseAddr(plate->id) : resp);
+		return (resp > 0 ? resp - plate->id : resp);
 	}
 	return INVAL_CMD;
 }
@@ -143,29 +120,29 @@ int getFWrev(struct piplate* plate){
 }
 
 void intEnable(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 4, "DAQC", "DAQC2", "MOTOR", "THERMO"))
+	if(plate->isValid && compareWith(plate->id, 4, DAQC, DAQC2, MOTOR, THERMO))
 		sendCMD(plate, 0x04, 0, 0, 0);
 }
 
 void intDisable(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 4, "DAQC", "DAQC2", "MOTOR", "THERMO"))
+	if(plate->isValid && compareWith(plate->id, 4, DAQC, DAQC2, MOTOR, THERMO))
 		sendCMD(plate, 0x05, 0, 0, 0);
 }
 
 int getINTflags(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 3, "DAQC", "DAQC2", "THERMO"))
+	if(plate->isValid && compareWith(plate->id, 3, DAQC, DAQC2, THERMO))
 		return safeExtract(sendCMD(plate, 0x06, 0, 0, 1));
 	return INVAL_CMD;
 }
 
 int getINTflag0(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 1, "MOTOR"))
+	if(plate->isValid && compareWith(plate->id, 1, MOTOR))
 		return safeExtract(sendCMD(plate, 0x06, 0, 0, 1));
 	return INVAL_CMD;
 }
 
 int getINTflag1(struct piplate* plate){
-	if(plate->isValid && strEquals(plate->id, 1, "MOTOR"))
+	if(plate->isValid && compareWith(plate->id, 1, MOTOR))
 		return safeExtract(sendCMD(plate, 0x07, 0, 0, 1));
 	return INVAL_CMD;
 }
@@ -181,9 +158,9 @@ void reset(struct piplate* plate){
 
 void relayON(struct piplate* plate, char relay){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "RELAY") && relay >= 1 && relay <=7){
+		if(compareWith(plate->id, 1, RELAY) && relay >= 1 && relay <=7){
 			sendCMD(plate, 0x10, relay, 0, 0);
-		}else if(strEquals(plate->id, 1, "TINKER") && relay >= 1 && relay <= 2){
+		}else if(compareWith(plate->id, 1, TINKER) && relay >= 1 && relay <= 2){
 			sendCMD(plate, 0x10, relay - 1, 0, 0);
 		}
 	}
@@ -191,9 +168,9 @@ void relayON(struct piplate* plate, char relay){
 
 void relayOFF(struct piplate* plate, char relay){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "RELAY") && relay >= 1 && relay <= 7){
+		if(compareWith(plate->id, 1, RELAY) && relay >= 1 && relay <= 7){
 			sendCMD(plate, 0x11, relay, 0, 0);
-		}else if(strEquals(plate->id, 1, "TINKER") && relay >=1 && relay <= 2){
+		}else if(compareWith(plate->id, 1, TINKER) && relay >=1 && relay <= 2){
 			sendCMD(plate, 0x11, relay - 1, 0, 0);
 		}
 	}
@@ -201,9 +178,9 @@ void relayOFF(struct piplate* plate, char relay){
 
 void relayTOGGLE(struct piplate* plate, char relay){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "RELAY") && relay >= 1 && relay <= 7){
+		if(compareWith(plate->id, 1, RELAY) && relay >= 1 && relay <= 7){
 			sendCMD(plate, 0x12, relay, 0, 0);
-		}else if(strEquals(plate->id, 1, "TINKER") && relay >= 1 && relay <= 2){
+		}else if(compareWith(plate->id, 1, TINKER) && relay >= 1 && relay <= 2){
 			sendCMD(plate, 0x12, relay - 1, 0, 0);
 		}
 	}
@@ -211,10 +188,10 @@ void relayTOGGLE(struct piplate* plate, char relay){
 
 void relayALL(struct piplate* plate, char relays){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "RELAY")){
+		if(compareWith(plate->id, 1, RELAY)){
 			if(relays >= 0 && relays <= 127)
 				sendCMD(plate, 0x13, relays, 0, 0);
-		}else if(strEquals(plate->id, 1, "TINKER")){
+		}else if(compareWith(plate->id, 1, TINKER)){
 			if(relays >= 0 && relays <= 3)
 				sendCMD(plate, 0x13, relays, 0, 0);
 		}
@@ -223,10 +200,10 @@ void relayALL(struct piplate* plate, char relays){
 
 int relaySTATE(struct piplate* plate, char relay){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "RELAY")){
+		if(compareWith(plate->id, 1, RELAY)){
 			if(relay >= 1 && relay <= 7)
 				return safeExtract(sendCMD(plate, 0x14, 0, 0, 1));
-		}else if(strEquals(plate->id, 1, "TINKER")){
+		}else if(compareWith(plate->id, 1, TINKER)){
 			if(relay >= 1 && relay <= 2)
 				return safeExtract(sendCMD(plate, 0x14, relay, 0, 0));
 		}
@@ -238,13 +215,13 @@ int relaySTATE(struct piplate* plate, char relay){
 
 void setMODE(struct piplate* plate, char bit, char* mode){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "TINKER")){
+		if(compareWith(plate->id, 1, TINKER)){
 			int numModes = 9;
 			int modeSelect = numModes;
 			bool channelGood = 0;
 			int i;
 
-			if (strEquals(mode, 1, "range")){
+			if (!strcmp(mode, "range")){
 				if((bit==12) || (bit==34) || (bit==56) || (bit==78))
 					channelGood = 1;
 				else
@@ -260,10 +237,10 @@ void setMODE(struct piplate* plate, char bit, char* mode){
 
 			if(channelGood){
 				for(i = 0; i < numModes; i++){
-					if(strEquals(mode, 1, modes[i]))
+					if(!strcmp(mode, modes[i]))
 						modeSelect = i;
 				}
-				if(strEquals(mode, 1, "led"))
+				if(!strcmp(mode, "led"))
 					modeSelect = 3;
 
 				if(modeSelect != numModes){
@@ -285,13 +262,13 @@ void setMODE(struct piplate* plate, char bit, char* mode){
 
 void setDOUTbit(struct piplate* plate, char bit){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "DAQC")){
+		if(compareWith(plate->id, 1, DAQC)){
 			if(bit >= 0 && bit <= 6)
 				sendCMD(plate, 0x10, bit, 0, 0);
-		}else if(strEquals(plate->id, 1, "DAQC2")){
+		}else if(compareWith(plate->id, 1, DAQC2)){
 			if(bit >= 0 && bit <= 7)
 				sendCMD(plate, 0x10, bit, 0, 0);
-		}else if(strEquals(plate->id, 1, "TINKER")){
+		}else if(compareWith(plate->id, 1, TINKER)){
 			if(bit >= 1 && bit <= 8)
 				sendCMD(plate, 0x26, bit - 1, 0, 0);
 		}
@@ -300,13 +277,13 @@ void setDOUTbit(struct piplate* plate, char bit){
 
 void clrDOUTbit(struct piplate* plate, char bit){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "DAQC")){
+		if(compareWith(plate->id, 1, DAQC)){
 			if(bit >= 0 && bit <= 6)
 				sendCMD(plate, 0x11, bit, 0, 0);
-		}else if(strEquals(plate->id, 1, "DAQC2")){
+		}else if(compareWith(plate->id, 1, DAQC2)){
 			if(bit >= 0 && bit <= 7)
 				sendCMD(plate, 0x11, bit, 0, 0);
-		}else if(strEquals(plate->id, 1, "TINKER")){
+		}else if(compareWith(plate->id, 1, TINKER)){
 			if(bit >= 1 && bit <= 8)
 				sendCMD(plate, 0x27, bit - 1, 0, 0);
 		}
@@ -315,13 +292,13 @@ void clrDOUTbit(struct piplate* plate, char bit){
 
 void toggleDOUTbit(struct piplate* plate, char bit){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "DAQC")){
+		if(compareWith(plate->id, 1, DAQC)){
 			if(bit >= 0 && bit <= 6)
 				sendCMD(plate, 0x12, bit, 0, 0);
-		}else if(strEquals(plate->id, 1, "DAQC2")){
+		}else if(compareWith(plate->id, 1, DAQC2)){
 			if(bit >= 0 && bit <= 7)
 				sendCMD(plate, 0x12, bit, 0, 0);
-		}else if(strEquals(plate->id, 1, "TINKER")){
+		}else if(compareWith(plate->id, 1, TINKER)){
 			if(bit >= 1 && bit <= 8)
 				sendCMD(plate, 0x28, bit - 1, 0, 0);
 		}
@@ -334,10 +311,10 @@ void toggleDOUTbit(struct piplate* plate, char bit){
 
 int getDINbit(struct piplate* plate, char bit){
 	if(plate->isValid){
-		if(strEquals(plate->id, 1, "TINKER"))
+		if(compareWith(plate->id, 1, TINKER))
 			bit--;
 
-		if(strEquals(plate->id, 3, "DAQC", "DAQC2", "TINKER")){
+		if(compareWith(plate->id, 3, DAQC, DAQC2, TINKER)){
 			if(bit >= 0 && bit <= 7){
 				int resp = safeExtract(sendCMD(plate, 0x20, bit, 0, 1));
 				return (resp > 0 ? 1 : (resp < 0 ? INVAL_CMD : 0));
@@ -349,7 +326,7 @@ int getDINbit(struct piplate* plate, char bit){
 
 int getDINall(struct piplate* plate){
 	if(plate->isValid){
-		if(strEquals(plate->id, 3, "DAQC", "DAQC2", "TINKER")){
+		if(compareWith(plate->id, 3, DAQC, DAQC2, TINKER)){
 			return safeExtract(sendCMD(plate, 0x25, 0, 0, 1));
 		}
 	}
@@ -358,7 +335,7 @@ int getDINall(struct piplate* plate){
 
 void enableDINint(struct piplate* plate, char bit, char edge){
 	if(plate->isValid){
-		if(strEquals(plate->id, 2, "DAQC", "DAQC2")){
+		if(compareWith(plate->id, 2, DAQC, DAQC2)){
 			if(bit >= 0 && bit <= 7){
 				if( edge == 'f' || edge == 'F' )
 					sendCMD(plate, 0x21, bit, 0, 0);
@@ -373,7 +350,7 @@ void enableDINint(struct piplate* plate, char bit, char edge){
 
 void disableDINint(struct piplate* plate, char bit){
 	if(plate->isValid){
-		if(strEquals(plate->id, 2, "DAQC", "DAQC2")){
+		if(compareWith(plate->id, 2, DAQC, DAQC2)){
 			if(bit >= 0 && bit <= 7)
 				sendCMD(plate, 0x24, bit, 0, 0);
 		}
@@ -382,8 +359,105 @@ void disableDINint(struct piplate* plate, char bit){
 
 /* End of digital input commands */
 
+
 /* Start of board led commands */
 
-
+//These ones are weird, I'll come back to them.
 
 /* End of board led commands */
+
+
+/* Calibration Constants / Flash Memory Functions */
+
+int CalGetByte(struct piplate* plate, char ptr){
+	if(plate->isValid){
+		if(compareWith(plate->id, 2, DAQC2, THERMO)){
+			return safeExtract(sendCMD(plate, 0xFD, 2, ptr, 1));
+		}
+	}
+	return INVAL_CMD;
+}
+
+void CalPutByte(struct piplate* plate, char data){
+	if(plate->isValid){
+		if(compareWith(plate->id, 2, DAQC2, THERMO)){
+			sendCMD(plate, 0xFD, 1, data, 0);
+		}
+	}
+}
+
+void CalEraseBlock(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 2, "DAQC2", THERMO)){
+			sendCMD(plate, 0xFD, 0, 0, 0);
+		}
+	}
+}
+
+/* Calibration Constants / Flash Memory Functions */
+
+/* Start of DAQC2 Oscilloscope Commands
+
+void startOSC(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2))
+			sendCMD(plate, 0xA1, 0, 0, 0);
+	}
+}
+
+void stopOSC(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2))
+			sendCMD(plate, 0xA0, 0, 0, 0);
+	}
+}
+
+void setOSCchannel(struct piplate* plate, bool c1, bool c2){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+
+		}
+	}
+}
+
+void setOSCsweep(struct piplate* plate, char rate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+
+		}
+	}
+}
+
+void getOSCtraces(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+
+		}
+	}
+}
+
+void setOSCtrigger(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+
+		}
+	}
+}
+
+void trigOSCnow(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+
+		}
+	}
+}
+
+void runOSC(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+
+		}
+	}
+}
+
+/* End of DAQC2 Oscilloscope Commands */

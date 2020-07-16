@@ -2,10 +2,8 @@
 #include "plateio.h"
 
 void main(){
-	struct piplate plate = { };
+	struct piplate plate = pi_plate_init(MOTOR, 3);
 	int i;
 
-	pi_plate_init(&plate, "DAQC", 1);
-
-	printf("id: %x\n", getDINbit(&plate, 0));
+	printf("id: %s\n", getID(&plate));
 }
