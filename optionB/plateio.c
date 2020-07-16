@@ -15,6 +15,9 @@
 
 #define INVAL_CMD -1
 
+const char* modes[9] = {"din", "dout", "button", "pwm", "range", "temp", "servo", "rgbled", "motion"};
+const bool pcaRequired[9] = {0, 0, 0, 1, 0, 0, 0, 0, 0};
+
 static bool strEquals(char*, int, ...);
 
 int safeExtract(char* buf){
@@ -233,6 +236,51 @@ int relaySTATE(struct piplate* plate, char relay){
 
 /* End of relay commands */
 
+void setMODE(struct piplate* plate, char bit, char* mode){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "TINKER")){
+			int numModes = 9;
+			int modeSelect = numModes;
+			bool channelGood = 0;
+			int i;
+
+			if (strEquals(mode, 1, "range")){
+				if((bit==12) || (bit==34) || (bit==56) || (bit==78))
+					channelGood = 1;
+				else
+					printf("Invalid channel pair. For range, must be 12, 34, 56, or 78.\n");
+				bit = (bit>>1) / 10;//Maps the inputs to 0, 1, 2, and 3.
+			}else{
+				if(bit >= 1 && bit <= 8)
+					channelGood = 1;
+				else
+					printf("Invalid channel. Must be 1 through 8.");
+				bit--;
+			}
+
+			if(channelGood){
+				for(i = 0; i < numModes; i++){
+					if(strEquals(mode, 1, modes[i]))
+						modeSelect = i;
+				}
+				if(strEquals(mode, 1, "led"))
+					modeSelect = 3;
+
+				if(modeSelect != numModes){
+					if(pcaRequired[modeSelect] && bit >= 6){
+						printf("This channel cannot support this mode.\n");
+					}else{
+						sendCMD(plate, 0x90, bit, modeSelect, 0);
+					}
+				}else{
+					printf("Invalid mode.\n");
+				}
+			}
+		}
+	}
+}
+
+
 /* Start of digital output commands */
 
 void setDOUTbit(struct piplate* plate, char bit){
@@ -281,3 +329,61 @@ void toggleDOUTbit(struct piplate* plate, char bit){
 }
 
 /* End of digital output commands */
+
+/* Start of digital input commands */
+
+int getDINbit(struct piplate* plate, char bit){
+	if(plate->isValid){
+		if(strEquals(plate->id, 1, "TINKER"))
+			bit--;
+
+		if(strEquals(plate->id, 3, "DAQC", "DAQC2", "TINKER")){
+			if(bit >= 0 && bit <= 7){
+				int resp = safeExtract(sendCMD(plate, 0x20, bit, 0, 1));
+				return (resp > 0 ? 1 : (resp < 0 ? INVAL_CMD : 0));
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+int getDINall(struct piplate* plate){
+	if(plate->isValid){
+		if(strEquals(plate->id, 3, "DAQC", "DAQC2", "TINKER")){
+			return safeExtract(sendCMD(plate, 0x25, 0, 0, 1));
+		}
+	}
+	return INVAL_CMD;
+}
+
+void enableDINint(struct piplate* plate, char bit, char edge){
+	if(plate->isValid){
+		if(strEquals(plate->id, 2, "DAQC", "DAQC2")){
+			if(bit >= 0 && bit <= 7){
+				if( edge == 'f' || edge == 'F' )
+					sendCMD(plate, 0x21, bit, 0, 0);
+				else if( edge == 'r' || edge == 'R' )
+					sendCMD(plate, 0x22, bit, 0, 0);
+				else if( edge == 'b' || edge == 'B' )
+					sendCMD(plate, 0x23, bit, 0, 0);
+			}
+		}
+	}
+}
+
+void disableDINint(struct piplate* plate, char bit){
+	if(plate->isValid){
+		if(strEquals(plate->id, 2, "DAQC", "DAQC2")){
+			if(bit >= 0 && bit <= 7)
+				sendCMD(plate, 0x24, bit, 0, 0);
+		}
+	}
+}
+
+/* End of digital input commands */
+
+/* Start of board led commands */
+
+
+
+/* End of board led commands */

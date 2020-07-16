@@ -3,9 +3,9 @@
 
 void main(){
 	struct piplate plate = { };
+	int i;
+
 	pi_plate_init(&plate, "DAQC", 1);
 
-	setDOUTbit(&plate, 1);
-
-	//printf("id: %s\n", getID(&plate));
+	printf("id: %x\n", getDINbit(&plate, 0));
 }
