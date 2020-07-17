@@ -11,6 +11,11 @@
 #define CW 0
 #define CCW 1
 
+#define FULL_STEP 0
+#define HALF_STEP 1
+#define QUARTER_STEP 2
+#define EIGHTH_STEP 3
+
 struct oscilloscope {
 	bool c1State;
 	bool c2State;
@@ -125,7 +130,7 @@ extern void	stepperINTdisable(struct piplate*, char);
 extern void	stepperCONFIG(struct piplate*, char, char, char, int, char);//motor, dir, step size, rate, acc
 extern void	stepperDIR(struct piplate*, char, char);//motor, direction
 extern void	stepperRATE(struct piplate*, char, int, char);//motor, rate, step size
-extern void	stepperACC(struct piplate*, char);
+extern void	stepperACC(struct piplate*, char, char);
 
 extern void	stepperMOVE(struct piplate*, char, int);//motor, steps
 extern void	stepperJOG(struct piplate*, char);//motor

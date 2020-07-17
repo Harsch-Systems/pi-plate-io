@@ -3,6 +3,7 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <string.h>
+#include <math.h>
 
 #include "../../pi-plate-module/module/piplate.h"
 #include "plateio.h"
@@ -538,3 +539,140 @@ void runOSC(struct piplate* plate){
 
 /* End of DAQC2 Oscilloscope Commands */
 
+/* Start of stepper motor functions */
+
+void stepperINIT(struct piplate* plate){
+	int i = 0;
+
+	plate->stm = (struct stepperMotorParams*)calloc(2, sizeof(struct stepperMotorParams));
+	for(i = 0; i < 2; i++){
+		plate->stm[i].dir = CW;
+		plate->stm[i].resolution = FULL_STEP;
+		plate->stm[i].rate = 500;
+		plate->stm[i].acc = 0;
+	}
+}
+
+void stepperENABLE(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2))
+			sendCMD(plate, 0xB1, 0, 0, 0);
+	}
+}
+
+void stepperDISABLE(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2))
+			sendCMD(plate, 0xB0, 0, 0, 0);
+	}
+}
+
+void stepperINTenable(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0xB7, motor-1, 0, 0);
+		}
+	}
+}
+
+void stepperINTdisable(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0xB8, motor-1, 0, 0);
+		}
+	}
+}
+
+void stepperCONFIG(struct piplate* plate, char motor, char direction, char resolution, int rate, char acceleration){
+	if(plate->isValid){
+		if(!plate->stm)
+			stepperINIT(plate);
+
+		if(compareWith(plate->id, 1, MOTOR)){
+			if((motor == 0 || motor == 1) && (direction == CW || direction == CCW) && resolution >= 0 && resolution <= 3 && rate >= 1 && rate <= 2000 && acceleration >= 0 && acceleration <= 10){
+				int param1 = 0;
+				int param2 = rate & 0x00FF;
+				int cmd = 0x10 + motor;
+				int increment;
+
+				plate->stm[motor].dir = direction;
+				plate->stm[motor].resolution = resolution;
+				plate->stm[motor].rate = rate;
+				plate->stm[motor].acc = acceleration;
+
+				if (direction == CW)
+					param1 = 0x40;
+				param1 += (resolution << 4);
+				param1 += (rate >> 8);
+
+				sendCMD(plate, cmd, param1, param2, 0);
+
+				if(acceleration == 0)
+					increment = 0;
+				else
+					increment = (int)(1024 * rate / (acceleration*2000) + 0.5);
+
+				param1 = 0x80 + (increment>>8);
+				param2 = increment & 0x00FF;
+				sendCMD(plate, cmd, param1, param2, 0);
+			}
+		}
+	}
+}
+
+void stepperDIR(struct piplate* plate, char motor, char direction){
+	if(plate->isValid){
+		if(!plate->stm)
+			stepperINIT(plate);
+
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2){
+				sendCMD(plate, 0xB3, motor - 1, direction, 0);
+			}
+		}else if(compareWith(plate->id, 1, MOTOR)){
+			stepperCONFIG(plate, motor, direction, plate->stm[motor].resolution, plate->stm[motor].rate, plate->stm[motor].acc);
+		}
+	}
+}
+
+void stepperRATE(struct piplate* plate, char motor, int rate, char resolution){
+	if(plate->isValid){
+		if(!plate->stm)
+			stepperINIT(plate);
+
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2 && rate >= 0 && rate <= 500 && resolution >= FULL_STEP && resolution <= HALF_STEP){
+				int rateInc = (int)(rate*pow(2, 13)/1000.0 + 0.5);
+				int param1 = ((motor-1)<<7)+(rateInc>>8);
+				int param2;
+
+				if(resolution == HALF_STEP)
+					param1 |= 0x40;
+				param2 = rateInc&0xFF;
+				sendCMD(plate, 0xB2, param1, param2, 0);
+			}
+		}else if(compareWith(plate->id, 1, MOTOR)){
+			stepperCONFIG(plate, motor, plate->stm[motor].dir, resolution, rate, plate->stm[motor].acc);
+		}
+	}
+}
+
+void stepperACC(struct piplate* plate, char motor, char acceleration){
+	if(plate->isValid){
+		if(!plate->stm)
+			stepperINIT(plate);
+
+		if(compareWith(plate->id, 1, MOTOR)){
+			stepperCONFIG(plate, motor, plate->stm[motor].dir, plate->stm[motor].resolution, plate->stm[motor].rate, acceleration);
+		}
+	}
+}
+
+void stepperMOVE(struct piplate* plate, char motor, int steps);
+void stepperJOG(struct piplate* plate, char motor);
+void stepperSTOP(struct piplate* plate, char motor);
+void stepperOFF(struct piplate* plate, char motor);
+
+/* End of stepper motor functions */
