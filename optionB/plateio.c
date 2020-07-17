@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <string.h>
@@ -89,6 +90,19 @@ struct piplate pi_plate_init(char id, char addr){
 	}
 	plate.isValid = 0;
 	return plate;
+}
+
+bool getINT(){
+	FILE *fp = fopen("/dev/PiPlates", "r");
+
+	if(!fp)
+		return NULL;
+
+	int resp = ioctl(fileno(fp), PIPLATE_GETINT);
+
+	fclose(fp);
+
+	return resp;
 }
 
 /* Start of system commands: */
@@ -396,34 +410,65 @@ void CalEraseBlock(struct piplate* plate){
 
 /* Calibration Constants / Flash Memory Functions */
 
-/* Start of DAQC2 Oscilloscope Commands
+/* Start of DAQC2 Oscilloscope Commands */
 
 void startOSC(struct piplate* plate){
 	if(plate->isValid){
-		if(compareWith(plate->id, 1, DAQC2))
+		if(compareWith(plate->id, 1, DAQC2)){
+			plate->osc = (struct oscilloscope*)calloc(1, sizeof(struct oscilloscope));
+
+			plate->osc->c1State = 1;
+			plate->osc->sRate = 9;
+
 			sendCMD(plate, 0xA1, 0, 0, 0);
+		}
 	}
 }
 
 void stopOSC(struct piplate* plate){
 	if(plate->isValid){
-		if(compareWith(plate->id, 1, DAQC2))
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(!plate->osc)
+				free(plate->osc);
+
 			sendCMD(plate, 0xA0, 0, 0, 0);
+		}
 	}
 }
 
 void setOSCchannel(struct piplate* plate, bool c1, bool c2){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, DAQC2)){
-
+			plate->osc->c1State = c1;
+			plate->osc->c2State = c2;
+			sendCMD(plate, 0xA2, c1, c2, 0);
 		}
 	}
 }
 
+/*
+* Rate:		Samples/sec:
+* 0:		100
+* 1:		200
+* 2:		500
+* 3:		1,000
+* 4:		2,000
+* 5:		5,000
+* 6;		10,000
+* 7:		20,000
+* 8:		50,000
+* 9:		100,000
+* 10:		200,000
+* 11:		500,000
+* 12:		1,000,000
+* Note: #12 can only be used with a single channel input.
+*/
+
 void setOSCsweep(struct piplate* plate, char rate){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, DAQC2)){
-
+			if(rate >= 0 && rate <= 12)
+				sendCMD(plate, 0xA3, rate, 0, 0);
 		}
 	}
 }
@@ -431,15 +476,46 @@ void setOSCsweep(struct piplate* plate, char rate){
 void getOSCtraces(struct piplate* plate){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, DAQC2)){
+			int i;
 
+			char cCount = plate->osc->c1State + plate->osc->c2State;
+			char* resp = sendCMD(plate, 0xA4, 0, 0, cCount*2048);
+
+			if(resp){
+				if(cCount == 2){
+					for(i = 0; i < 1024; i++){
+						plate->osc->trace1[i] = resp[4*i]*256 + resp[4*i+1];
+						plate->osc->trace2[i] = resp[4*i+2]*256 + resp[4*i+3];
+					}
+				}else{
+					if(plate->osc->c1State){
+						for(i = 0; i < 1024; i++)
+							plate->osc->trace1[i]=resp[2*i]*256+resp[2*i+1];
+					}else{
+						for(i = 0; i < 1024; i++)
+							plate->osc->trace2[i]=resp[2*i]*256+resp[2*i+1];
+					}
+				}
+			}
 		}
 	}
 }
 
-void setOSCtrigger(struct piplate* plate){
+void setOSCtrigger(struct piplate* plate, char channel, char* type, char* edge, int level){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, DAQC2)){
+			char option = 0;
+			if(channel >= 1 && channel <= 2)
+				option = 128*(channel-1);
 
+			if(!strcmp(type, "normal"))//Options: "normal", "auto"
+				option += 64;
+
+			if(!strcmp(edge, "falling"))//Options: "rising", "falling"
+				option += 32;
+
+			if(level >= 0 && level <= 4095)
+				sendCMD(plate, 0xA6, option + (level>>8), level&0xFF, 0);
 		}
 	}
 }
@@ -447,7 +523,7 @@ void setOSCtrigger(struct piplate* plate){
 void trigOSCnow(struct piplate* plate){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, DAQC2)){
-
+			sendCMD(plate, 0xA7, 0, 0, 0);
 		}
 	}
 }
@@ -455,9 +531,10 @@ void trigOSCnow(struct piplate* plate){
 void runOSC(struct piplate* plate){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, DAQC2)){
-
+			sendCMD(plate, 0xA5, 0, 0, 0);
 		}
 	}
 }
 
 /* End of DAQC2 Oscilloscope Commands */
+
