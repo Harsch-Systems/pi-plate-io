@@ -13,6 +13,11 @@
 const char* modes[9] = {"din", "dout", "button", "pwm", "range", "temp", "servo", "rgbled", "motion"};
 const bool pcaRequired[9] = {0, 0, 0, 1, 0, 0, 0, 0, 0};
 
+const double kVoltageCoefficients[10] = {
+const double jVoltageCoefficients[9] = {
+const double kThermoCoefficients[3][10] = {{
+const double jThermoCoefficients[3][9] = {{
+
 static bool compareWith(int, int, ...);
 
 int safeExtract(char* buf){
@@ -591,10 +596,10 @@ void stepperCONFIG(struct piplate* plate, char motor, char direction, char resol
 			stepperINIT(plate);
 
 		if(compareWith(plate->id, 1, MOTOR)){
-			if((motor == 0 || motor == 1) && (direction == CW || direction == CCW) && resolution >= 0 && resolution <= 3 && rate >= 1 && rate <= 2000 && acceleration >= 0 && acceleration <= 10){
+			if(motor >= 1 && motor <= 2 && (direction == CW || direction == CCW) && resolution >= 0 && resolution <= 3 && rate >= 1 && rate <= 2000 && acceleration >= 0 && acceleration <= 10){
 				int param1 = 0;
 				int param2 = rate & 0x00FF;
-				int cmd = 0x10 + motor;
+				int cmd = 0x10 + motor - 1;
 				int increment;
 
 				plate->stm[motor].dir = direction;
@@ -670,9 +675,207 @@ void stepperACC(struct piplate* plate, char motor, char acceleration){
 	}
 }
 
-void stepperMOVE(struct piplate* plate, char motor, int steps);
-void stepperJOG(struct piplate* plate, char motor);
-void stepperSTOP(struct piplate* plate, char motor);
-void stepperOFF(struct piplate* plate, char motor);
+void stepperMOVE(struct piplate* plate, char motor, int steps){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2 && steps >= -16383 && steps <= 16383){
+				bool stepSign = (steps > 0 ? 1 : 0);
+				int param1 = ((motor - 1) << 7) + (stepSign << 6) + (steps>>8);
+				int param2 = abs(steps) & 0xFF;
+				sendCMD(plate, 0xB4, param1, param2, 0);
+			}
+		}else if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 2 && steps <= 65535){
+				char cmd = 0x12 + motor - 1;
+				int param1 = steps>>8;
+				int param2 = steps&0xFF;
+				sendCMD(plate, cmd, param1, param2, 0);
+			}
+		}
+	}
+}
+
+void stepperJOG(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0xB5, motor-1, 0, 0);
+		}else if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0x14 + motor - 1, 0, 0, 0);
+		}
+	}
+}
+
+void stepperSTOP(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0xB6, motor - 1, 0, 0);
+		}else if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0x16 + motor - 1, 0, 0, 0);
+		}
+	}
+}
+
+void stepperOFF(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0xBA, motor - 1, 0, 0);
+		}else if(compareWith(plate->id, 1, MOTOR)){
+				if(motor >= 1 && motor <= 2)
+					sendCMD(plate, 0x1E + motor - 1, 0, 0, 0);
+		}
+	}
+}
 
 /* End of stepper motor functions */
+
+/* Start of thermo functions */
+
+char tempScale[8][12] = KELVINS;
+
+void tempINIT(struct piplate* plate){
+	int i;
+
+	plate->tmp = (struct tempParams*)calloc(1, sizeof(struct tempParams));
+	for(i = 0; i < 12; i ++){
+		plate->tmp->scale[i] = KELVINS;
+	}
+
+	for(i = 0; i < 8; i ++){
+		plate->tmp->type[i] = 'k';
+	}
+}
+
+void setSCALE(struct piplate* plate, char channel, char scale){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(!plate->tmp)
+				tempINIT(plate);
+
+			if(channel >= 1 && channel <= 12){
+				if(scale == KELVINS || scale == CELSIUS || scale == FAHRENHEIT)
+					plate->tmp->scale[channel - 1] = scale;
+			}
+		}
+	}
+}
+
+void setTYPE(struct piplate* plate, char channel, char scale){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(!plate->tmp)
+				tempINIT(plate);
+
+			if(channel >= 1 && channel <= 8){
+				if(type == 'k' || type == 'j')
+					plate->tmp->type[channel - 1] = type;
+			}
+		}
+	}
+}
+
+char getTYPE(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(!plate->tmp)
+				tempINIT(plate);
+
+			if(channel >= 1 && channel <= 8)
+				return plate->tmp->type[channel - 1];
+		}
+	}
+}
+
+char getSCALE(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(!plate->tmp)
+				tempINIT(plate);
+
+			if(channel >= 1 && channel <= 12)
+				return plate->tmp->scale[channel - 1];
+		}
+	}
+	return INVAL_CMD;
+}
+
+double getTEMP(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(!plate->tmp)
+				tempINIT(plate);
+
+			if(channel >= 1 && channel <= 12){
+				int Tvals[2];
+				int resp = sendCMD(plate, 0x70, (--channel), 0, 4);
+				if(!resp)
+					return INVAL_CMD;
+
+				Tvals[0] = resp[0] * 256 + resp[1];//T channel data
+				Tvals[1] = resp[2] * 256 + resp[3];//Cold junction data
+
+				if(channel >= 8){
+					double temp = Tvals[0];
+					if(temp > 0x8000){//It's negative, take the 2's complement.
+						temp = temp^0xFFFF;
+						temp = -(temp + 1);
+					}
+					temp = temp / 16.0;//Celsius
+
+					if(plate->tmp->scale[channel] == KELVINS)
+						temp += 273.15;
+
+					if(plate->tmp->scale[channel] == FAHRENHEIT)
+						temp = temp * 1.8 + 32.0;
+				}else{
+					int i;
+					double temp = Tvals[1];
+
+					int a = -0.00347;
+					int b = -10.888;
+					int c = 1777.3 - temp;
+
+					int coldJunctionV = 0;
+
+					temp *= 2400.0/65535.0;//Convert cold junction data to voltage
+					temp = (-b-sqrt(pow(b, 2) - (4*a*c)))/(2 * a) + 30.0; //Convert voltage to temperature
+
+					if(plate->tmp->type[channel] == 'k')[
+						for(i = 0; i < 10; i ++){
+							coldJunctionV +=
+						}
+					}else{
+
+					}
+				}
+			}
+		}
+	}
+}
+
+double getCOLD(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(!plate->tmp)
+				tempINIT(plate);
+
+		}
+	}
+}
+
+double getRAW(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(!plate->tmp)
+				tempINIT(plate);
+
+		}
+	}
+}
+
+/* End of thermo functions */
+

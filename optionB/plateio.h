@@ -16,6 +16,10 @@
 #define QUARTER_STEP 2
 #define EIGHTH_STEP 3
 
+#define CELSIUS 'c'
+#define FAHRENHEIT 'f'
+#define KELVINS 'k'
+
 struct oscilloscope {
 	bool c1State;
 	bool c2State;
@@ -41,6 +45,11 @@ struct dcMotorParams {
 	char acc;
 };
 
+struct tempParams {
+	char scale[12];
+	char type[8];
+}
+
 struct piplate {
 	char id;
 	char addr;
@@ -49,13 +58,13 @@ struct piplate {
 	bool ack;
 	struct oscilloscope* osc;
 	struct stepperMotorParams* stm;
-	struct dcMotorParams* dcm;
+	struct dcMotorParams* dc;
+	struct tempParams* tmp;
 };
 
 extern struct piplate	pi_plate_init(char, char);
 
 extern bool	getINT(void);
-
 
 /* Start of system level functions */
 
@@ -153,11 +162,14 @@ extern void	dcSTOP(struct piplate*, char);
 
 /* Start of temperature functions */
 
-extern void	setSCALE(struct piplate*, char);
-extern void	getSCALE(struct piplate*);
-extern void	getTEMP(struct piplate*, char);
-extern void	getCOLD(struct piplate*);
-extern void	getRAW(struct piplate*, char);
+extern void	setSCALE(struct piplate*, char, char);
+extern char	getSCALE(struct piplate*, char);
+extern void	setTYPE(struct piplate*, char, char);
+extern char	getTYPE(struct piplate*, char);
+
+extern double	getTEMP(struct piplate*, char);
+extern double	getCOLD(struct piplate*);
+extern double	getRAW(struct piplate*, char);
 
 extern void	setLINEFREQ(struct piplate*, char);
 extern void	setSMOOTH(struct piplate*);

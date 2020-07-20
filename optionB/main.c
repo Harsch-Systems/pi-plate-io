@@ -1,10 +1,20 @@
 #include <stdio.h>
+#include <unistd.h>
 #include "plateio.h"
 
 void main(){
 	struct piplate plate = pi_plate_init(DAQC2, 4);
 	int i;
 
+	stepperENABLE(&plate);
+	stepperDIR(&plate, 1, CW);
+	stepperJOG(&plate, 1);
+
+	sleep(3);
+
+	stepperSTOP(&plate, 1);
+	stepperOFF(&plate, 1);
+/*
 	startOSC(&plate);//Start the plate
 	setOSCchannel(&plate, 1, 0);//Set the channel
 
@@ -30,4 +40,5 @@ void main(){
 	}
 
 	stopOSC(&plate);
+*/
 }
