@@ -17,7 +17,7 @@ const double kVoltageCoefficients[10] = {-1.7600413686E-02, 3.8921204975E-02, 1.
 const double jVoltageCoefficients[9] = {0, 5.0381187815E-02, 3.0475836930E-05, -8.5681065720E-08, 1.3228195295E-10, -1.7052958337E-13, 2.0948090697E-16, -1.2538395336E-19, 1.5631725697E-23};
 const double kThermoCoefficients[3][10] = {{0,2.5173462E01,-1.1662878,-1.0833638,-8.9773540E-01,-3.7342377E-01,-8.6632643E-02,-1.0450598E-02,-5.1920577E-04,0},
 					   {0,2.508355E01,7.860106E-02,-2.503131E-01,8.315270E-02,-1.228034E-02,9.804036E-04,-4.413030E-05,1.0577340E-06,-1.052755E-08},
-					   {-1.318058E02,4.830222E01,-1.646031,5.464731E-02,-9.650715E-04,8.802193E-06,-3.110810E-08,0,0,0};
+					   {-1.318058E02,4.830222E01,-1.646031,5.464731E-02,-9.650715E-04,8.802193E-06,-3.110810E-08,0,0,0}};
 const double jThermoCoefficients[3][9] = {{0,1.9528268E1,-1.2286185,-1.0752178,-5.9086933E-01,-1.7256713E-01,-2.8131513E-02,-2.3963370E-03,-8.3823321E-05},
 					  {0,1.978425E01,-2.001204E-01,1.036969E-02,-2.549687E-04,3.585153E-06,-5.344285E-08,5.099890E-10,0},
 					  {-3.1135818702E03,3.00543684E02,-9.94773230,1.70276630E-01,-1.43033468E-03,4.73886084E-06,0,0,0}};
@@ -740,17 +740,17 @@ void stepperOFF(struct piplate* plate, char motor){
 /* Start of thermo functions */
 
 //Convert 32 bit number to a double
-double binaryToDouble(int* list){
-	int i;
+double binaryToDouble(char* list){
+	int i = 0;
 	int polarity = 1;
-	int exp;
-	double frac;
 	int expsign = 1;
-	int val = list[0];
+	double exp;
+	double frac;
 
-	for(i = 0; i < 3; i ++){
+	int val = list[0];
+	for(i = 0; i < 3; i++){
 		val = val << 8;
-		val += list[i + i];
+		val = val+list[i + i];
 	}
 
 	if(val & pow(2, 31) != 0)//Read first bit
@@ -762,8 +762,15 @@ double binaryToDouble(int* list){
 
 	val=val&((int)pow(2, 24)-1);
 
-	frac = (double)val/((double)(pow(2, 24)-1))*expsign;
-	return pow(10.0, exp + frac)*polarity;
+	double denom = pow(2, 24) - 1;
+
+	frac = expsign * (double) val / denom;
+
+	double r = polarity * pow(10, exp + frac);
+
+	printf("ret: %f\n", r);
+
+	return r;
 }
 
 void tempINIT(struct piplate* plate){
@@ -780,7 +787,7 @@ void tempINIT(struct piplate* plate){
 
 	//Calibration data from flash memory
 
-	int values[4];
+	char values[4];
 	for(i = 0; i < 4; i ++){
 		values[i] = CalGetByte(plate, i);
 	}
@@ -788,6 +795,7 @@ void tempINIT(struct piplate* plate){
 
 	for(i = 0; i < 8; i++){
 		int j;
+		double val;
 		for(j = 0; j < 4; j++){
 			values[j]=CalGetByte(plate, 8*i+j+4);
 		}
@@ -893,11 +901,9 @@ double getTEMP(struct piplate* plate, char channel){
 					c -= temp;
 					temp = (-b-sqrt(pow(b, 2) - (4*a*c)))/(2 * a) + 30.0; //Convert voltage to temperature
 
-					printf("voltage to temp: %f\n", temp);
-
 					if(plate->tmp->type[channel] == 'k'){
 						for(i = 0; i < 10; i ++){
-							coldJunctionV += kVoltageCoefficients[i]*pow(temp, i);
+							coldJunctionV += kVoltageCoefficients[i] * pow(temp, i);
 						}
 					}else{
 						for(i = 0; i < 9; i ++){
@@ -906,6 +912,8 @@ double getTEMP(struct piplate* plate, char channel){
 					}
 
 					printf("to voltage: %f\n", coldJunctionV);
+
+					printf("offset: %f, scale: %f, bias: %f\n", plate->tmp->calOffset[channel], plate->tmp->calScale[channel], plate->tmp->calBias);
 
 					vMeas=((Tvals[0]*2.4/65535.0)-plate->tmp->calOffset[channel])/plate->tmp->calScale[channel]*1000;
 					vHot=vMeas+coldJunctionV-(plate->tmp->calBias * 1000.0);

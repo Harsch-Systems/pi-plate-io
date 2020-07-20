@@ -48,9 +48,9 @@ struct dcMotorParams {
 struct tempParams {
 	char scale[12];
 	char type[8];
-	int calScale[8];
-	int calOffset[8];
-	int calBias;
+	double calScale[8];
+	double calOffset[8];
+	double calBias;
 };
 
 struct piplate {
@@ -66,7 +66,7 @@ struct piplate {
 };
 
 extern struct piplate	pi_plate_init(char, char);
-
+extern double	binaryToDouble(char*);
 extern bool	getINT(void);
 
 /* Start of system level functions */
