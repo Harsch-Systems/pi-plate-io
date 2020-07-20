@@ -13,14 +13,14 @@
 const char* modes[9] = {"din", "dout", "button", "pwm", "range", "temp", "servo", "rgbled", "motion"};
 const bool pcaRequired[9] = {0, 0, 0, 1, 0, 0, 0, 0, 0};
 
-const double kVoltageCoefficients[10] = {-1.7600413686 * pow(10, -2), 3.8921204975 * pow(10, -2), 1.8558770032 * pow(10, -5), -9.9457592874E * pow(10, -8), 3.1840945719 * pow(10, -10), -5.6072844889E * pow(10, -13), 5.6075059059 * pow(10, -16), -3.2020720003 * pow(10, -19), 9.7151147152 * pow(10, -23), -1.2104721275 * pow(10, -26)};
+const double kVoltageCoefficients[10] = {-1.7600413686 * pow(10, -2), 3.8921204975 * pow(10, -2), 1.8558770032 * pow(10, -5), -9.9457592874 * pow(10, -8), 3.1840945719 * pow(10, -10), -5.6072844889 * pow(10, -13), 5.6075059059 * pow(10, -16), -3.2020720003 * pow(10, -19), 9.7151147152 * pow(10, -23), -1.2104721275 * pow(10, -26)};
 const double jVoltageCoefficients[9] = {0, 5.0381187815 * pow(10, -2), 3.0475836930 * pow(10, -5), -8.5681065720 * pow(10, -8), 1.3228195295 * pow(10, -10), -1.7052958337 * pow(10, -13), 2.0948090697 * pow(10, -16), -1.2538395336 * pow(10, -19), 1.5631725697 * pow(10, -23)};
 const double kThermoCoefficients[3][10] = {{0,2.5173462 * pow(10, 1),-1.1662878,-1.0833638,-8.9773540 * pow(10, -1),-3.7342377 * pow(10, -1),-8.6632643 * pow(10, -2),-1.0450598 * pow(10, -2),-5.1920577 * pow(10, -4),0},
 					   {0,2.508355 * pow(10, 1),7.860106 * pow(10, -2),-2.503131 * pow(10, -1),8.315270 * pow(10, -2),-1.228034 * pow(10, -2),9.804036 * pow(10, -4),-4.413030 * pow(10, -5),1.0577340 * pow(10, -6),-1.052755 * pow(10, -8)},
-					   {-1.318058 * pow(10, 2),4.830222 * pow(10, 1),-1.646031,5.464731 * pow(10, -2),-9.650715 * pow(10, -4),8.802193 * pow(10, -6),-3.110810 * pow(10, -8),0,0,0}}
+					   {-1.318058 * pow(10, 2),4.830222 * pow(10, 1),-1.646031,5.464731 * pow(10, -2),-9.650715 * pow(10, -4),8.802193 * pow(10, -6),-3.110810 * pow(10, -8),0,0,0}};
 const double jThermoCoefficients[3][9] = {{0,1.9528268 * pow(10, 1),-1.2286185,-1.0752178,-5.9086933 * pow(10, -1),-1.7256713 * pow(10, -1),-2.8131513 * pow(10, -2),-2.3963370 * pow(10, -3),-8.3823321 * pow(10, -5)},
 					  {0,1.978425 * pow(10, 1),-2.001204 * pow(10, -1),1.036969 * pow(10, -2),-2.549687 * pow(10, -4),3.585153 * pow(10, -6),-5.344285 * pow(10, -8),5.099890 * pow(10, -10),0},
-					  {-3.1135818702 * pow(10, 3),3.00543684 * pow(10, 2),-9.94773230,1.70276630 * pow(10, -1),-1.43033468 * pow(10, -3),4.73886084 * pow(10, -6),0,0,0}}
+					  {-3.1135818702 * pow(10, 3),3.00543684 * pow(10, 2),-9.94773230,1.70276630 * pow(10, -1),-1.43033468 * pow(10, -3),4.73886084 * pow(10, -6),0,0,0}};
 
 static bool compareWith(int, int, ...);
 
@@ -739,18 +739,63 @@ void stepperOFF(struct piplate* plate, char motor){
 
 /* Start of thermo functions */
 
-char tempScale[8][12] = KELVINS;
+//Convert 32 bit number to a double
+double binaryToDouble(int* list){
+	int i;
+	int polarity = 1;
+	int exp;
+	double frac;
+	int expsign = 1;
+	int val = list[0];
+
+	for(i = 0; i < 3; i ++){
+		val = val << 8;
+		val += list[i + i];
+	}
+
+	if(val & pow(2, 31) != 0)//Read first bit
+		polarity = -1;
+
+	exp = ((val>>24)&0x7F)-64;
+	if(exp < 0)
+		expsign = -1;
+
+	val=val&((int)pow(2, 24)-1);
+
+	frac = (double)val/((double)(pow(2, 24)-1))*expsign;
+	return pow(10.0, exp + frac)*polarity;
+}
 
 void tempINIT(struct piplate* plate){
 	int i;
 
 	plate->tmp = (struct tempParams*)calloc(1, sizeof(struct tempParams));
 	for(i = 0; i < 12; i ++){
-		plate->tmp->scale[i] = KELVINS;
+		plate->tmp->scale[i] = KELVINS;//Set scales
 	}
 
 	for(i = 0; i < 8; i ++){
-		plate->tmp->type[i] = 'k';
+		plate->tmp->type[i] = 'k';//Set types
+	}
+
+	//Calibration data from flash memory
+
+	int values[4];
+	for(i = 0; i < 4; i ++){
+		values[i] = CalGetByte(plate, i);
+	}
+	plate->tmp->calBias = binaryToDouble(values);
+
+	for(i = 0; i < 8; i++){
+		int j;
+		for(j = 0; j < 4; j++){
+			values[j]=CalGetByte(plate, 8*i+j+4);
+		}
+		plate->tmp->calOffset[i]=binaryToDouble(values);
+		for(j = 4; j < 8; j++){
+			values[j-4]=CalGetByte(plate, 8*i+j+4);
+		}
+		plate->tmp->calScale[i]=binaryToDouble(values);
 	}
 }
 
@@ -768,7 +813,7 @@ void setSCALE(struct piplate* plate, char channel, char scale){
 	}
 }
 
-void setTYPE(struct piplate* plate, char channel, char scale){
+void setTYPE(struct piplate* plate, char channel, char type){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, THERMO)){
 			if(!plate->tmp)
@@ -815,50 +860,84 @@ double getTEMP(struct piplate* plate, char channel){
 
 			if(channel >= 1 && channel <= 12){
 				int Tvals[2];
-				int resp = sendCMD(plate, 0x70, (--channel), 0, 4);
+				char* resp = sendCMD(plate, 0x70, channel - 1, 0, 4);
+				double temp;
+
+				channel--;
+
 				if(!resp)
 					return INVAL_CMD;
 
 				Tvals[0] = resp[0] * 256 + resp[1];//T channel data
 				Tvals[1] = resp[2] * 256 + resp[3];//Cold junction data
 
-				if(channel >= 8){
-					double temp = Tvals[0];
-					if(temp > 0x8000){//It's negative, take the 2's complement.
-						temp = temp^0xFFFF;
-						temp = -(temp + 1);
+				if(channel > 7){
+					int t = Tvals[0];
+					if(t > 0x8000){//It's negative, take the 2's complement.
+						t = t^0xFFFF;
+						t = -(t + 1);
 					}
-					temp = temp / 16.0;//Celsius
-
-					if(plate->tmp->scale[channel] == KELVINS)
-						temp += 273.15;
-
-					if(plate->tmp->scale[channel] == FAHRENHEIT)
-						temp = temp * 1.8 + 32.0;
+					temp = t / 16.0;//Celsius
 				}else{
 					int i;
-					double temp = Tvals[1];
+					double a = -0.00347;
+					double b = -10.888;
+					double c = 1777.3;
 
-					int a = -0.00347;
-					int b = -10.888;
-					int c = 1777.3 - temp;
+					double coldJunctionV = 0;
+					double vMeas;
+					double vHot;
+					int k = 1;
 
-					int coldJunctionV = 0;
-
-					temp *= 2400.0/65535.0;//Convert cold junction data to voltage
+					temp = Tvals[1] * 2400.0/65535.0;//Convert cold junction data to voltage
+					c -= temp;
 					temp = (-b-sqrt(pow(b, 2) - (4*a*c)))/(2 * a) + 30.0; //Convert voltage to temperature
 
-					if(plate->tmp->type[channel] == 'k')[
+					printf("voltage to temp: %f\n", temp);
+
+					if(plate->tmp->type[channel] == 'k'){
 						for(i = 0; i < 10; i ++){
-							coldJunctionV +=
+							coldJunctionV += kVoltageCoefficients[i]*pow(temp, i);
 						}
 					}else{
-
+						for(i = 0; i < 9; i ++){
+							coldJunctionV += jVoltageCoefficients[i]*pow(temp, i);
+						}
 					}
+
+					printf("to voltage: %f\n", coldJunctionV);
+
+					vMeas=((Tvals[0]*2.4/65535.0)-plate->tmp->calOffset[channel])/plate->tmp->calScale[channel]*1000;
+					vHot=vMeas+coldJunctionV-(plate->tmp->calBias * 1000.0);
+
+					printf("to hot: %f\n", vHot);
+
+					k = (vHot < 0) ? 0 : ((vHot > 20.644) ? 2 : 1);
+
+					temp = 0;
+					if(plate->tmp->type[channel] == 'k'){
+						for(i = 0; i < 10; i++){
+							temp += kThermoCoefficients[k][i]*pow(vHot, i);
+						}
+					}else{
+						for(i = 0; i < 10; i ++){
+							temp += jThermoCoefficients[k][i]*pow(vHot, i);
+						}
+					}
+
+					printf("and finally to C: %f\n", temp);
 				}
+				if(plate->tmp->scale[channel] == KELVINS)
+					temp += 273.15;
+				else if(plate->tmp->scale[channel] == FAHRENHEIT)
+					temp = temp * 1.8 + 32.0;
+
+				temp = ((int) (temp * 1000)) / 1000.0;//Round
+				return temp;
 			}
 		}
 	}
+	return INVAL_CMD;
 }
 
 double getCOLD(struct piplate* plate){

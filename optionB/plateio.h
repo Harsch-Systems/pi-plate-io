@@ -48,7 +48,10 @@ struct dcMotorParams {
 struct tempParams {
 	char scale[12];
 	char type[8];
-}
+	int calScale[8];
+	int calOffset[8];
+	int calBias;
+};
 
 struct piplate {
 	char id;
