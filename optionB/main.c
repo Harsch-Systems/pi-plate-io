@@ -5,6 +5,8 @@
 void main(){
 	struct piplate plate = pi_plate_init(THERMO, 3);
 
+	setSCALE(&plate, 1, FAHRENHEIT);
+
 	printf("temp: %f\n", getTEMP(&plate, 1));
 /*
 	startOSC(&plate);//Start the plate

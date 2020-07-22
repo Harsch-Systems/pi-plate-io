@@ -749,26 +749,24 @@ double binaryToDouble(char* list){
 
 	int val = list[0];
 	for(i = 0; i < 3; i++){
+		int l = list[i + 1];
 		val = val << 8;
-		val = val+list[i + i];
+		val += l;
 	}
-
-	if(val & pow(2, 31) != 0)//Read first bit
+	if((val&0x80000000) != 0)//Read first bit
 		polarity = -1;
 
 	exp = ((val>>24)&0x7F)-64;
 	if(exp < 0)
 		expsign = -1;
 
-	val=val&((int)pow(2, 24)-1);
+	val=val&0xFFFFFF;
 
-	double denom = pow(2, 24) - 1;
+	double denom = 0xFFFFFF;
 
 	frac = expsign * (double) val / denom;
 
 	double r = polarity * pow(10, exp + frac);
-
-	printf("ret: %f\n", r);
 
 	return r;
 }
@@ -911,29 +909,22 @@ double getTEMP(struct piplate* plate, char channel){
 						}
 					}
 
-					printf("to voltage: %f\n", coldJunctionV);
-
-					printf("offset: %f, scale: %f, bias: %f\n", plate->tmp->calOffset[channel], plate->tmp->calScale[channel], plate->tmp->calBias);
-
 					vMeas=((Tvals[0]*2.4/65535.0)-plate->tmp->calOffset[channel])/plate->tmp->calScale[channel]*1000;
+
 					vHot=vMeas+coldJunctionV-(plate->tmp->calBias * 1000.0);
-
-					printf("to hot: %f\n", vHot);
-
-					k = (vHot < 0) ? 0 : ((vHot > 20.644) ? 2 : 1);
 
 					temp = 0;
 					if(plate->tmp->type[channel] == 'k'){
 						for(i = 0; i < 10; i++){
+							k = (vHot < 0) ? 0 : ((vHot > 20.644) ? 2 : 1);
 							temp += kThermoCoefficients[k][i]*pow(vHot, i);
 						}
 					}else{
 						for(i = 0; i < 10; i ++){
+							k = (vHot < 0) ? 0 : ((vHot > 42.919) ? 2 : 1);
 							temp += jThermoCoefficients[k][i]*pow(vHot, i);
 						}
 					}
-
-					printf("and finally to C: %f\n", temp);
 				}
 				if(plate->tmp->scale[channel] == KELVINS)
 					temp += 273.15;
