@@ -171,7 +171,7 @@ extern void	setTYPE(struct piplate*, char, char);
 extern char	getTYPE(struct piplate*, char);
 
 extern double	getTEMP(struct piplate*, char);
-extern double	getCOLD(struct piplate*);
+extern double	getCOLD(struct piplate*, char);
 extern double	getRAW(struct piplate*, char);
 
 extern void	setLINEFREQ(struct piplate*, char);

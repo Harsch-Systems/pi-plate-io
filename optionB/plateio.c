@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 
 #include "../../pi-plate-module/module/piplate.h"
 #include "plateio.h"
@@ -737,6 +738,12 @@ void stepperOFF(struct piplate* plate, char motor){
 
 /* End of stepper motor functions */
 
+/* Start of dc motor functions */
+
+
+
+/* End of dc motor functions */
+
 /* Start of thermo functions */
 
 //Convert 32 bit number to a double
@@ -785,35 +792,42 @@ void tempINIT(struct piplate* plate){
 
 	//Calibration data from flash memory
 
-	char values[4];
-	for(i = 0; i < 4; i ++){
-		values[i] = CalGetByte(plate, i);
-	}
-	plate->tmp->calBias = binaryToDouble(values);
+	if(compareWith(plate->id, 1, THERMO)){
+		char values[4];
+		for(i = 0; i < 4; i ++){
+			values[i] = CalGetByte(plate, i);
+		}
+		plate->tmp->calBias = binaryToDouble(values);
 
-	for(i = 0; i < 8; i++){
-		int j;
-		double val;
-		for(j = 0; j < 4; j++){
-			values[j]=CalGetByte(plate, 8*i+j+4);
+		for(i = 0; i < 8; i++){
+			int j;
+			double val;
+			for(j = 0; j < 4; j++){
+				values[j]=CalGetByte(plate, 8*i+j+4);
+			}
+			plate->tmp->calOffset[i]=binaryToDouble(values);
+			for(j = 4; j < 8; j++){
+				values[j-4]=CalGetByte(plate, 8*i+j+4);
+			}
+			plate->tmp->calScale[i]=binaryToDouble(values);
 		}
-		plate->tmp->calOffset[i]=binaryToDouble(values);
-		for(j = 4; j < 8; j++){
-			values[j-4]=CalGetByte(plate, 8*i+j+4);
-		}
-		plate->tmp->calScale[i]=binaryToDouble(values);
 	}
 }
 
 void setSCALE(struct piplate* plate, char channel, char scale){
 	if(plate->isValid){
-		if(compareWith(plate->id, 1, THERMO)){
-			if(!plate->tmp)
-				tempINIT(plate);
+		if(!plate->tmp)
+			tempINIT(plate);
 
+		if(compareWith(plate->id, 1, THERMO)){
 			if(channel >= 1 && channel <= 12){
 				if(scale == KELVINS || scale == CELSIUS || scale == FAHRENHEIT)
 					plate->tmp->scale[channel - 1] = scale;
+			}
+		}else if(compareWith(plate->id, 1, DAQC)){
+			if(channel >= 0 && channel <= 7){
+				if(scale == KELVINS || scale == CELSIUS || scale == FAHRENHEIT)
+					plate->tmp->scale[channel] = scale;
 			}
 		}
 	}
@@ -847,11 +861,14 @@ char getTYPE(struct piplate* plate, char channel){
 
 char getSCALE(struct piplate* plate, char channel){
 	if(plate->isValid){
-		if(compareWith(plate->id, 1, THERMO)){
-			if(!plate->tmp)
-				tempINIT(plate);
+		if(!plate->tmp)
+			tempINIT(plate);
 
+		if(compareWith(plate->id, THERMO)){
 			if(channel >= 1 && channel <= 12)
+				return plate->tmp->scale[channel - 1];
+		}else if(compareWith(plate->id, DAQC)){
+			if(channel >= 0 && channel <= 7)
 				return plate->tmp->scale[channel - 1];
 		}
 	}
@@ -934,27 +951,122 @@ double getTEMP(struct piplate* plate, char channel){
 				temp = ((int) (temp * 1000)) / 1000.0;//Round
 				return temp;
 			}
+		}else if(compareWith(plate->id, 1, DAQC)){
+			if(channel >= 0 && channel <= 7){
+				double temp;
+				char* resp;
+
+				sendCMD(plate, 0x70, channel, 0, 0);
+				sleep(1);
+				resp = sendCMD(plate, 0x71, channel, 0, 2);
+
+				if(resp){
+					int t = resp[0] * 256 + resp[1];
+					if(t > 0x8000){
+						t = t^0xFFFF;
+						t = -(t + 1);
+					}
+					temp = (double)t;
+					if(plate->tmp->scale[channel] == KELVINS)
+						temp += 273.15;
+					if(plate->tmp->scale[channel] == FAHRENHEIT)
+						temp = temp * 1.8 + 32.0;
+
+					temp = ((int) (temp * 1000)) / 1000.0;
+					return temp;
+				}
+			}
 		}
 	}
 	return INVAL_CMD;
 }
 
-double getCOLD(struct piplate* plate){
+double getCOLD(struct piplate* plate, char scale){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, THERMO)){
-			if(!plate->tmp)
-				tempINIT(plate);
+			if(scale == CELSIUS || scale == FAHRENHEIT || scale == KELVINS){
+				if(!plate->tmp)
+					tempINIT(plate);
 
+				int cjval = 0;
+				char* resp = sendCMD(plate, 0x70, 0, 0, 4);
+				double temp = 0;
+
+				if(resp){
+					double a = -0.00347;
+					double b = -10.888;
+					double c = 1777.3;
+
+					cjval = resp[2] * 256 + resp[3];
+					temp = cjval*2400.0/65535.0;
+					c -= temp;
+					temp = (-b-sqrt(pow(b, 2) - (4*a*c)))/(2*a) + 30.0;
+
+					if(scale == KELVINS)
+						temp += 273.15;
+					else if(scale == FAHRENHEIT)
+						temp = temp * 1.8 + 32.0;
+
+					temp = ((int) (temp * 1000)) / 1000.0;
+					return temp;
+				}
+			}
 		}
 	}
+	return INVAL_CMD;
 }
 
 double getRAW(struct piplate* plate, char channel){
 	if(plate->isValid){
 		if(compareWith(plate->id, 1, THERMO)){
-			if(!plate->tmp)
-				tempINIT(plate);
+			if(channel >= 1 && channel <= 8){
+				channel--;
+				if(!plate->tmp)
+					tempINIT(plate);
 
+				int tVals[2] = {0, 0};
+				char* resp = sendCMD(plate, 0x70, channel, 0, 4);
+				double temp = 0;
+				double vMeas;
+				double vRaw;
+
+				if(resp){
+					tVals[0] = resp[0] * 256 + resp[1];
+					tVals[1] = resp[2] * 256 + resp[3];
+
+					vMeas = ((tVals[0] * 2.4 / 65535.0) - plate->tmp->calOffset[channel])/plate->tmp->calScale[channel]*1000;
+					vRaw = vMeas - (plate->tmp->calBias * 1000);
+
+					return vRaw;
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+void setLINEFREQ(struct piplate* plate, char freq){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			if(freq == 50 || freq == 60){
+				sendCMD(plate, 0x73, freq, 0, 0);
+			}
+		}
+	}
+}
+
+void setSMOOTH(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			sendCMD(plate, 0x74, 1, 0, 0);
+		}
+	}
+}
+
+void clrSMOOTH(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, THERMO)){
+			sendCMD(plate, 0x74, 0, 0, 0);
 		}
 	}
 }

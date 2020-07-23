@@ -5,9 +5,7 @@
 void main(){
 	struct piplate plate = pi_plate_init(THERMO, 3);
 
-	setSCALE(&plate, 1, FAHRENHEIT);
-
-	printf("temp: %f\n", getTEMP(&plate, 1));
+	printf("temp: %f,\n cold: %f,\n raw: %f\n", getTEMP(&plate, 1), getCOLD(&plate, KELVINS), getRAW(&plate, 1));
 /*
 	startOSC(&plate);//Start the plate
 	setOSCchannel(&plate, 1, 0);//Set the channel
