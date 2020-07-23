@@ -1404,6 +1404,9 @@ double* getADCall(struct piplate* plate){
 
 			return vals;
 		}else if(compareWith(plate->id, 1, DAQC2)){
+			if(!plate->daqc2p)
+				daqc2pINIT(plate);
+
 			char* resp = sendCMD(plate, 0x31, 0, 0, 16);
 
 			if(resp){
@@ -1424,3 +1427,59 @@ double* getADCall(struct piplate* plate){
 	return NULL;
 }
 /* End of ADC functions */
+
+/* Start of DAC functions */
+
+double getDAC(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			if(channel == 0 || channel == 1){
+				char* resp = sendCMD(plate, 0x40+channel+2, 0, 0, 2);
+				if(resp){
+					double value = resp[0] * 256 + resp[1];
+					double Vcc = getADC(plate, 8);
+					value = value * Vcc / 1023.0;
+					return value;
+				}
+			}
+		}else if(compareWith(plate->id, 1, DAQC2)){
+			if(channel >= 0 && channel <= 3){
+				char* resp = sendCMD(plate, 0x40+channel+4, 0, 0, 2);
+				if(resp){
+					double value = resp[0]*256+resp[1];
+					value=value/1000.0;
+					return value;
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+void setDAC(struct piplate* plate, char channel, double value){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			if(value >= 0 && value <= 4.095 && (channel == 0 || channel == 1)){
+				double Vcc = getADC(plate, 8);
+				int v = (int)(value/Vcc * 1024);
+				char hibyte = value>>8;
+				char lobyte = value - (hibyte<<8);
+				sendCMD(plate, 0x40+channel, hibyte, lobyte, 0);
+			}
+		}else if(compareWith(plate->id, 1, DAQC2)){
+			if(value >= 0 && value <= 4.095 && channel >= 0 && channel <= 3){
+				char hibyte;
+				char lobyte;
+				int v = (int)(value*plate->daqc2p->calDAC[channel]*1000);
+				if(v > 4095)
+					v=4095;
+
+				hibyte = v>>8;
+				lobyte = v - (hibyte<<8);
+				sendCMD(plate, 0x40+channel, hibyte, lobyte, 0);
+			}
+		}
+	}
+}
+
+/* End of DAC functions */

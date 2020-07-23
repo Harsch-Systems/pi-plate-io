@@ -225,3 +225,45 @@ extern int	getPWM(struct piplate*, char);
 extern double	getFREQ(struct piplate*);
 
 /* End of PWM and freq */
+
+/* Start of function generator commands */
+
+void	fgON(struct piplate*, char);
+void	fgOFF(struct piplate*, char);
+void	fgFREQ(struct piplate*, char, int);
+void	fgTYPE(struct piplate*, char, char);
+void	fgLEVEL(struct piplate*, char, char);
+
+/* End of function generator commands */
+
+/* Start of switch commands */
+
+void	getSWstate(struct piplate*);
+void	enableSWint(struct piplate*);
+void	disableSWint(struct piplate*);
+void	enableSWpower(struct piplate*);
+void	disableSWpower(struct piplate*);
+
+/* End of switch commands */
+
+/* Start of motorplate sensor commands */
+
+char	getSENSORS(struct piplate*);
+int	getTACHcoarse(struct piplate*, char);
+int	getTACHfine(struct piplate*, char);
+
+/* End of motorplate sensor commands */
+
+/* Miscellaneous commands */
+
+double	getRANGE(struct piplate*, char, char);//DAQC, TINKER
+double	getRANGEfast(struct piplate*, char, char);//TINKER
+bool	getMOTION(struct piplate*, char);//TINKER
+double	getPOT(struct piplate*, char, double);//TINKER
+bool	getBUTTON(struct piplate*, char, char);//TINKER
+void	setSERVO(struct piplate*, char, char);//TINKER
+void	setSERVO2(struct piplate*, char, double);//TINKER
+void	setSERVOlow(struct piplate*, double);//TINKER
+void	setSERVOhigh(struct piplate*, double);//TINKER
+
+/* End of miscellaneous commands */

@@ -5,11 +5,9 @@
 void main(){
 	struct piplate plate = pi_plate_init(DAQC2, 4);
 
-	printf("valid?: %d\n", plate.isValid);
+	double val = getADC(&plate, 8);
 
-	double* vals = getADCall(&plate);
-
-	printf("val0: %f\n", vals[0]);
+	printf("val8: %f\n", val);
 
 /*
 	startOSC(&plate);//Start the plate
