@@ -36,13 +36,13 @@ struct stepperMotorParams {
 	char dir;
 	char resolution;
 	int rate;
-	char acc;
+	double acc;
 };
 
 struct dcMotorParams {
 	char dir;
 	char speed;
-	char acc;
+	double acc;
 };
 
 struct tempParams {
@@ -51,6 +51,12 @@ struct tempParams {
 	double calScale[8];
 	double calOffset[8];
 	double calBias;
+};
+
+struct DAQC2CalParams {
+	double calScale[8];
+	double calOffset[8];
+	double calDAC[8];
 };
 
 struct piplate {
@@ -63,34 +69,34 @@ struct piplate {
 	struct stepperMotorParams* stm;
 	struct dcMotorParams* dc;
 	struct tempParams* tmp;
+	struct DAQC2CalParams* daqc2p;
 };
 
 extern struct piplate	pi_plate_init(char, char);
-extern double	binaryToDouble(char*);
 extern bool	getINT(void);
 
 /* Start of system level functions */
 
-extern int	getADDR(struct piplate*);
-extern char*	getID(struct piplate*);
-extern int	getHWrev(struct piplate*);
-extern int	getFWrev(struct piplate*);
-extern void	intEnable(struct piplate*);//0x04
-extern void	intDisable(struct piplate*);//0x05
-extern int	getINTflags(struct piplate*);//0x06
-extern int	getINTflag0(struct piplate*);
-extern int	getINTflag1(struct piplate*);
-extern void	reset(struct piplate*);
+extern int	getADDR(struct piplate*);//Any plate
+extern char*	getID(struct piplate*);//Any plate
+extern int	getHWrev(struct piplate*);//Any plate
+extern int	getFWrev(struct piplate*);//Any plate
+extern void	intEnable(struct piplate*);//THERMO, DAQC, DAQC2, MOTOR
+extern void	intDisable(struct piplate*);//THERMO, DAQC, DAQC2, MOTOR
+extern int	getINTflags(struct piplate*);//THERMO, DAQc, DAQC2
+extern int	getINTflag0(struct piplate*);//MOTOR
+extern int	getINTflag1(struct piplate*);//MOTOR
+extern void	reset(struct piplate*);//Any plate
 
 /* End of system level functions */
 
 /*Start of relay functions */
 
-extern void	relayON(struct piplate*, char);
-extern void	relayOFF(struct piplate*, char);
-extern void	relayTOGGLE(struct piplate*, char);
-extern void	relayALL(struct piplate*, char);
-extern int	relaySTATE(struct piplate*, char);
+extern void	relayON(struct piplate*, char);// |RELAY ---relay #, 1-7--- |  |TINKER: ---relay #, 1-2--- |
+extern void	relayOFF(struct piplate*, char);// same
+extern void	relayTOGGLE(struct piplate*, char);// same
+extern void	relayALL(struct piplate*, char);// |RELAY ---relay vals, 0-127--- | |TINKER: ---relay vals, 0-3--- |
+extern int	relaySTATE(struct piplate*, char);// |RELAY ---relay #, 1-7--- | |TINKER: ---relay #, 1-2--- |
 
 /* End of relay functions */
 
@@ -139,10 +145,10 @@ extern void	stepperDISABLE(struct piplate*);
 extern void	stepperINTenable(struct piplate*, char);
 extern void	stepperINTdisable(struct piplate*, char);
 
-extern void	stepperCONFIG(struct piplate*, char, char, char, int, char);//motor, dir, step size, rate, acc
+extern void	stepperCONFIG(struct piplate*, char, char, char, int, double);//motor, dir, step size, rate, acc
 extern void	stepperDIR(struct piplate*, char, char);//motor, direction
 extern void	stepperRATE(struct piplate*, char, int, char);//motor, rate, step size
-extern void	stepperACC(struct piplate*, char, char);
+extern void	stepperACC(struct piplate*, char, double);
 
 extern void	stepperMOVE(struct piplate*, char, int);//motor, steps
 extern void	stepperJOG(struct piplate*, char);//motor
@@ -153,15 +159,32 @@ extern void	stepperOFF(struct piplate*, char);
 
 /* Start of dc motor functions */
 
-extern void	dcCONFIG(struct piplate*, char, char, char, char);
+extern void	dcCONFIG(struct piplate*, char, char, char, double);
 extern void	dcSPEED(struct piplate*, char, char);
 extern void	dcDIR(struct piplate*, char, char);
-extern void	dcACC(struct piplate*, char, char);
+extern void	dcACC(struct piplate*, char, double);
 
 extern void	dcSTART(struct piplate*, char);
 extern void	dcSTOP(struct piplate*, char);
 
 /* End of dc motor functions */
+
+/* Start of motor interrupt functions */
+
+extern void	setSENSORint(struct piplate*, char);
+extern void	slrSENSORint(struct piplate*, char);
+
+extern void	enablestepSTOPint(struct piplate*, char);
+extern void	disablestepSTOPint(struct piplate*, char);
+extern void	enablestepSTEADYint(struct piplate*, char);
+extern void	disablestepSTEADYint(struct piplate*, char);
+
+extern void	enabledcSTOPint(struct piplate*, char);
+extern void	disabledcSTOPint(struct piplate*, char);
+extern void	enabledcSTEADYint(struct piplate*, char);
+extern void	disabledcSTEADYint(struct piplate*, char);
+
+/* End of motor interrupt functions */
 
 /* Start of temperature functions */
 
@@ -179,3 +202,26 @@ extern void	setSMOOTH(struct piplate*);
 extern void	clrSMOOTH(struct piplate*);
 
 /* End of temperature functions */
+
+/* Start of ADC functions */
+
+extern double	getADC(struct piplate*, char);
+extern double*	getADCall(struct piplate*);
+
+/* End of ADC functions */
+
+/* Start of DAC functions */
+
+extern double	getDAC(struct piplate*, char);
+extern void	setDAC(struct piplate*, char, double);
+
+/* End of DAC functions */
+
+/* Start of PWM and freq */
+
+extern void	setPWM(struct piplate*, char, char);
+extern int	getPWM(struct piplate*, char);
+
+extern double	getFREQ(struct piplate*);
+
+/* End of PWM and freq */

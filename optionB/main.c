@@ -3,9 +3,14 @@
 #include "plateio.h"
 
 void main(){
-	struct piplate plate = pi_plate_init(THERMO, 3);
+	struct piplate plate = pi_plate_init(DAQC2, 4);
 
-	printf("temp: %f,\n cold: %f,\n raw: %f\n", getTEMP(&plate, 1), getCOLD(&plate, KELVINS), getRAW(&plate, 1));
+	printf("valid?: %d\n", plate.isValid);
+
+	double* vals = getADCall(&plate);
+
+	printf("val0: %f\n", vals[0]);
+
 /*
 	startOSC(&plate);//Start the plate
 	setOSCchannel(&plate, 1, 0);//Set the channel

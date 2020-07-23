@@ -11,6 +11,8 @@
 
 #define INVAL_CMD -1
 
+#define RMAX 2000
+
 const char* modes[9] = {"din", "dout", "button", "pwm", "range", "temp", "servo", "rgbled", "motion"};
 const bool pcaRequired[9] = {0, 0, 0, 1, 0, 0, 0, 0, 0};
 
@@ -419,6 +421,37 @@ void CalEraseBlock(struct piplate* plate){
 	}
 }
 
+double binaryToDouble(char* list){
+	int i = 0;
+	int polarity = 1;
+	int expsign = 1;
+	double exp;
+	double frac;
+
+	int val = list[0];
+	for(i = 0; i < 3; i++){
+		int l = list[i + 1];
+		val = val << 8;
+		val += l;
+	}
+	if((val&0x80000000) != 0)//Read first bit
+		polarity = -1;
+
+	exp = ((val>>24)&0x7F)-64;
+	if(exp < 0)
+		expsign = -1;
+
+	val=val&0xFFFFFF;
+
+	double denom = 0xFFFFFF;
+
+	frac = expsign * (double) val / denom;
+
+	double r = polarity * pow(10, exp + frac);
+
+	return r;
+}
+
 /* Calibration Constants / Flash Memory Functions */
 
 /* Start of DAQC2 Oscilloscope Commands */
@@ -595,7 +628,7 @@ void stepperINTdisable(struct piplate* plate, char motor){
 	}
 }
 
-void stepperCONFIG(struct piplate* plate, char motor, char direction, char resolution, int rate, char acceleration){
+void stepperCONFIG(struct piplate* plate, char motor, char direction, char resolution, int rate, double acceleration){
 	if(plate->isValid){
 		if(!plate->stm)
 			stepperINIT(plate);
@@ -622,7 +655,7 @@ void stepperCONFIG(struct piplate* plate, char motor, char direction, char resol
 				if(acceleration == 0)
 					increment = 0;
 				else
-					increment = (int)(1024 * rate / (acceleration*2000) + 0.5);
+					increment = (int)(1024.0 * rate / (acceleration*2000) + 0.5);
 
 				param1 = 0x80 + (increment>>8);
 				param2 = increment & 0x00FF;
@@ -669,7 +702,7 @@ void stepperRATE(struct piplate* plate, char motor, int rate, char resolution){
 	}
 }
 
-void stepperACC(struct piplate* plate, char motor, char acceleration){
+void stepperACC(struct piplate* plate, char motor, double acceleration){
 	if(plate->isValid){
 		if(!plate->stm)
 			stepperINIT(plate);
@@ -740,44 +773,217 @@ void stepperOFF(struct piplate* plate, char motor){
 
 /* Start of dc motor functions */
 
+void dcINIT(struct piplate* plate){
+	int i = 0;
 
+	plate->dc = (struct dcMotorParams*)calloc(4, sizeof(struct dcMotorParams));
+	for(i = 0; i < 4; i++){
+		plate->dc[i].dir = CW;
+		plate->dc[i].speed = 50;
+		plate->dc[i].acc = 0;
+	}
+}
 
+void dcCONFIG(struct piplate* plate, char motor, char dir, char speed, double acceleration){
+	if(plate->isValid){
+		if(!plate->dc)
+			dcINIT(plate);
+
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4 && (dir == CW || dir == CCW) && speed >= 0 && speed <= 100 && acceleration >= 0 && acceleration <= 10){
+				int param1 = (motor - 1) << 6;
+				int param2;
+				int cmd = 0x3A + (motor - 1);
+				int v = (int)((speed*1023.0/100.0) + 0.5);
+				int increment;
+
+				plate->dc[motor - 1].dir = dir;
+				plate->dc[motor - 1].speed = speed;
+				plate->dc[motor - 1].acc = acceleration;
+
+				if(motor == 1 || motor == 2)
+					v = (v*5)>>3;
+
+				if(dir == CW)
+					param1 += 0x10;
+
+				param1 += (v >> 8);
+				param2 = v & 0x00FF;
+				sendCMD(plate, 0x30, param1, param2, 0);
+
+				if(acceleration == 0)
+					increment = 0;
+				else
+					increment = (int)(1024.0*v/(acceleration*RMAX)+0.5);
+
+				param1 = (increment >> 8);
+				param2 = increment&0x00FF;
+
+				sendCMD(plate, cmd, param1, param2, 0);
+			}
+		}
+	}
+}
+
+void dcSPEED(struct piplate* plate, char motor, char speed){
+	if(plate->isValid){
+		if(!plate->dc)
+			dcINIT(plate);
+
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4 && speed >= 0 && speed <= 100){
+				int param1 = (motor-1)<<6;
+				int param2;
+				int v = (int)((speed*1023.0/100.0) + 0.5);
+				if(motor == 1 || motor == 2)
+					v = (v*5)>>3;
+
+				param1 += (v>>8);
+				param2 = v&0x00FF;
+				sendCMD(plate, 0x33, param1, param2, 0);
+			}
+		}
+	}
+}
+
+void dcDIR(struct piplate* plate, char motor, char dir){
+	if(plate->isValid){
+		if(!plate->dc)
+			dcINIT(plate);
+
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4)
+				dcCONFIG(plate, motor, plate->dc[motor - 1].speed, dir, plate->dc[motor - 1].acc);
+		}
+	}
+}
+
+void dcACC(struct piplate* plate, char motor, double acceleration){
+	if(plate->isValid){
+		if(!plate->dc)
+			dcINIT(plate);
+
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4)
+				dcCONFIG(plate, motor, plate->dc[motor - 1].speed, plate->dc[motor - 1].dir, acceleration);
+		}
+	}
+}
+
+void dcSTART(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			sendCMD(plate, 0x31, motor-1, 0, 0);
+		}
+	}
+}
+
+void dcSTOP(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			sendCMD(plate, 0x32, motor-1, 0, 0);
+		}
+	}
+}
 /* End of dc motor functions */
+
+/* Start of motor interrupt functions */
+
+void setSENSORint(struct piplate* plate, char sensor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(sensor >= 1 && sensor <= 4)
+				sendCMD(plate, 0x24, sensor, 0, 0);
+		}
+	}
+}
+
+void clrSENSORint(struct piplate* plate, char sensor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(sensor >= 1 && sensor <= 4)
+				sendCMD(plate, 0x25, sensor, 0, 0);
+		}
+	}
+}
+
+void enablestepSTOPint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0x1A + (motor - 1), 0, 0, 0);
+		}
+	}
+}
+
+void disablestepSTOPint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0x1C + (motor - 1), 0, 0, 0);
+		}
+	}
+}
+
+void enablestepSTEADYint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0x4A + (motor - 1), 0, 0, 0);
+		}
+	}
+}
+
+void disablestepSTEADYint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 2)
+				sendCMD(plate, 0x4C + (motor - 1), 0, 0, 0);
+		}
+	}
+}
+
+void enabledcSTOPint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4)
+				sendCMD(plate, 0x34, motor - 1, 0, 0);
+		}
+	}
+}
+
+void disabledcSTOPint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4)
+				sendCMD(plate, 0x35, motor - 1, 0, 0);
+		}
+	}
+}
+
+void enabledcSTEADYint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4)
+				sendCMD(plate, 0x36, motor - 1, 0, 0);
+		}
+	}
+}
+
+void disabledcSTEADYint(struct piplate* plate, char motor){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(motor >= 1 && motor <= 4)
+				sendCMD(plate, 0x37, motor - 1, 0, 0);
+		}
+	}
+}
+
+/* End of motor interrupt functions */
 
 /* Start of thermo functions */
 
 //Convert 32 bit number to a double
-double binaryToDouble(char* list){
-	int i = 0;
-	int polarity = 1;
-	int expsign = 1;
-	double exp;
-	double frac;
-
-	int val = list[0];
-	for(i = 0; i < 3; i++){
-		int l = list[i + 1];
-		val = val << 8;
-		val += l;
-	}
-	if((val&0x80000000) != 0)//Read first bit
-		polarity = -1;
-
-	exp = ((val>>24)&0x7F)-64;
-	if(exp < 0)
-		expsign = -1;
-
-	val=val&0xFFFFFF;
-
-	double denom = 0xFFFFFF;
-
-	frac = expsign * (double) val / denom;
-
-	double r = polarity * pow(10, exp + frac);
-
-	return r;
-}
-
 void tempINIT(struct piplate* plate){
 	int i;
 
@@ -1073,3 +1279,148 @@ void clrSMOOTH(struct piplate* plate){
 
 /* End of thermo functions */
 
+void daqc2pINIT(struct piplate* plate){
+	int i, j, cSign;
+	char vals[6];
+
+	plate->daqc2p = (struct DAQC2CalParams*)calloc(1, sizeof(struct DAQC2CalParams));
+
+	for(i = 0; i < 8; i++){
+		for(j = 0; j < 6; j++){
+			vals[j] = CalGetByte(plate, 6*i+j);
+		}
+
+		//calScale
+		cSign = vals[0]&0x80;
+		plate->daqc2p->calScale[i] = 0.04*((vals[0]&0x7F)*256+vals[1])/32767.0;
+		if(cSign)
+			plate->daqc2p->calScale[i] *= -1;
+
+		plate->daqc2p->calScale[i]+=1;
+
+		//calOffset
+		cSign = vals[2]&0x80;
+		plate->daqc2p->calOffset[i] = 0.2*((vals[2]&0x7F)*256+vals[3])/32767.0;
+		if(cSign)
+			plate->daqc2p->calOffset[i] *= -1;
+
+		//calDAC
+		cSign = vals[4]&0x80;
+		plate->daqc2p->calDAC[i] = 0.04*((vals[4]&0x7F)*256+vals[5])/32767.0;
+		if(cSign)
+			plate->daqc2p->calDAC[i] *= -1;
+
+		plate->daqc2p->calDAC[i] += 1;
+	}
+}
+
+/* Start of ADC functions */
+
+double getADC(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 4){
+				char* resp = sendCMD(plate, 0x30, channel - 1, 0, 2);
+
+				if(resp){
+					double value = resp[0] * 256 + resp[1];
+
+					value = (value * 5.1 * 2.4/4095.0);
+					value = ((int)(value * 1000))/1000.0;
+					return value;
+				}
+			}
+		}else if(compareWith(plate->id, 1, DAQC)){
+			if(channel >= 0 && channel <= 8){
+				char* resp = sendCMD(plate, 0x30, channel, 0, 2);
+
+				if(resp){
+					double value = resp[0] * 256 + resp[1];
+
+					value = (value * 4.096/1024.0);
+					value = ((int)(value * 1000))/1000.0;
+
+					if(channel == 8)
+						value *= 2;
+
+					return value;
+				}
+			}
+		}else if(compareWith(plate->id, 1, DAQC2)){
+			if(!plate->daqc2p)
+				daqc2pINIT(plate);
+
+			if(channel >= 0 && channel <= 8){
+				char* resp = sendCMD(plate, 0x30, channel, 0, 2);
+
+				if(resp){
+					double value = resp[0] * 256 + resp[1];
+					if(channel == 8){
+						value = value * 5.0*2.4/65536.0;
+					}else{
+						value = (value*24.0/65536.0)-12.0;
+						value = value * plate->daqc2p->calScale[channel] + plate->daqc2p->calOffset[channel];
+						value = ((int)(value*1000))/1000.0;
+					}
+					return value;
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+double* getADCall(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			char* resp = sendCMD(plate, 0x31, 0, 0, 8);
+
+			if(resp){
+				int i;
+				static double vals[4];
+
+				for(i = 0; i < 4; i++){
+					vals[i] = (256*resp[2*i]+resp[2*i+1]);
+					vals[i] = ((int)(vals[i]*1000))/1000.0;
+				}
+
+				return vals;
+			}
+		}else if(compareWith(plate->id, 1, DAQC)){
+			int i;
+			static double vals[8];
+
+			for(i = 0; i < 8; i++){
+				char* resp = sendCMD(plate, 0x30, i, 0, 2);
+
+				if(resp){
+					vals[i] = resp[0]*256+resp[1];
+					vals[i] = vals[i] * 4.096 / 1024.0;
+					vals[i] = ((int)(vals[i]*1000))/1000.0;
+				}else{
+					return NULL;
+				}
+			}
+
+			return vals;
+		}else if(compareWith(plate->id, 1, DAQC2)){
+			char* resp = sendCMD(plate, 0x31, 0, 0, 16);
+
+			if(resp){
+				int i;
+				static double vals[8];
+
+				for(i = 0; i < 8; i++){
+					vals[i] = resp[2*i]*256+resp[2*i+1];
+					vals[i] = vals[i]*24.0/65536.0 - 12.0;
+					vals[i] = vals[i]*plate->daqc2p->calScale[i] + plate->daqc2p->calOffset[i];
+					vals[i] = ((int)(vals[i]*1000))/1000.0;
+				}
+
+				return vals;
+			}
+		}
+	}
+	return NULL;
+}
+/* End of ADC functions */
