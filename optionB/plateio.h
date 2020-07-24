@@ -1,3 +1,6 @@
+#ifndef PLATEIO_H_INCLUDED
+#define PLATEIO_H_INCLUDED
+
 #include <stdbool.h>
 #include <stdarg.h>
 
@@ -284,3 +287,5 @@ double	getPOT(struct piplate*, char, double);//TINKER
 bool	getBUTTON(struct piplate*, char);//TINKER
 
 /* End of miscellaneous commands */
+
+#endif /* PLATEIO_H_INCLUDED */
