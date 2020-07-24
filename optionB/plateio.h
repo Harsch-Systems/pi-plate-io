@@ -111,6 +111,19 @@ extern void	reset(struct piplate*);//Any plate
 
 /* End of system level functions */
 
+/* Start of LED commands */
+
+extern void	setLEDcolor(struct piplate*, char*);
+extern void	setLED(struct piplate*);
+extern void	clrLEDcolor(struct piplate*, char*);
+extern void	clrLED(struct piplate*);
+extern void	toggleLEDcolor(struct piplate*, char*);
+extern void	toggleLED(struct piplate*);
+extern char	getLEDcolor(struct piplate*, char*);
+extern char	getLED(struct piplate*);
+
+/* End of LED commands */
+
 /*Start of relay functions */
 
 extern void	relayON(struct piplate*, char);// |RELAY ---relay #, 1-7--- |  |TINKER: ---relay #, 1-2--- |

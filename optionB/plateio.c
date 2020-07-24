@@ -14,6 +14,7 @@
 #define RMAX 2000
 
 const char* modes[9] = {"din", "dout", "button", "pwm", "range", "temp", "servo", "rgbled", "motion"};
+const char* LEDcolors[7] = {"red", "green", "yellow", "blue", "magenta", "cyan", "white"};
 const bool pcaRequired[9] = {0, 0, 0, 1, 0, 0, 0, 0, 0};
 
 const double kVoltageCoefficients[10] = {-1.7600413686E-02, 3.8921204975E-02, 1.8558770032E-05, -9.9457592874E-08, 3.1840945719E-10, -5.6072844889E-13, 5.6075059059E-16, -3.2020720003E-19, 9.7151147152E-23, -1.2104721275E-26};
@@ -180,6 +181,90 @@ void reset(struct piplate* plate){
 }
 
 /* End of system commands */
+
+/* Start of LED commands */
+
+char getLEDnum(char* color, char max){
+	char led = 0;
+	int i;
+	for(i = 0; i < max; i ++){
+		if(!strcmp(color, LEDcolors[i]))
+			led = i + 1;
+	}
+
+	return led;
+}
+
+void setLEDcolor(struct piplate* plate, char* color){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			sendCMD(plate, 0x60, getLEDnum(color, 2), 0, 0);
+		}else if(compareWith(plate->id, 1, DAQC2)){
+			sendCMD(plate, 0x60, getLEDnum(color, 7), 0, 0);
+		}
+	}
+}
+
+void setLED(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 3, THERMO, MOTOR, RELAY)){
+			sendCMD(plate, 0x60, 0, 0, 0);
+		}
+	}
+}
+
+void clrLEDcolor(struct piplate* plate, char* color){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			sendCMD(plate, 0x61, getLEDnum(color, 2), 0, 0);
+		}
+	}
+}
+
+void clrLED(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			sendCMD(plate, 0x60, 0, 0, 0);
+		}else if(compareWith(plate->id, 3, THERMO, MOTOR, RELAY)){
+			sendCMD(plate, 0x61, 0, 0, 0);
+		}
+	}
+}
+
+void toggleLEDcolor(struct piplate* plate, char* color){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			sendCMD(plate, 0x62, getLEDnum(color, 2), 0, 0);
+		}
+	}
+}
+
+void toggleLED(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 3, THERMO, MOTOR, RELAY)){
+			sendCMD(plate, 0x62, 0, 0, 0);
+		}
+	}
+}
+
+char getLEDcolor(struct piplate* plate, char* color){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			return safeExtract(sendCMD(plate, 0x63, getLEDnum(color, 2), 0, 0));
+		}
+	}
+	return INVAL_CMD;
+}
+
+char getLED(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 2, DAQC2, THERMO)){
+			return safeExtract(sendCMD(plate, 0x63, 0, 0, 0));
+		}
+	}
+	return INVAL_CMD;
+}
+/* End of LED commands */
 
 /* Start of relay commands */
 
@@ -1035,6 +1120,11 @@ void setSCALE(struct piplate* plate, char channel, char scale){
 				if(scale == KELVINS || scale == CELSIUS || scale == FAHRENHEIT)
 					plate->tmp->scale[channel] = scale;
 			}
+		}else if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 8){
+				if(scale == KELVINS || scale == CELSIUS || scale == FAHRENHEIT)
+					plate->tmp->scale[channel - 1] = scale;
+			}
 		}
 	}
 }
@@ -1070,11 +1160,14 @@ char getSCALE(struct piplate* plate, char channel){
 		if(!plate->tmp)
 			tempINIT(plate);
 
-		if(compareWith(plate->id, THERMO)){
+		if(compareWith(plate->id, 1, THERMO)){
 			if(channel >= 1 && channel <= 12)
 				return plate->tmp->scale[channel - 1];
-		}else if(compareWith(plate->id, DAQC)){
+		}else if(compareWith(plate->id, 1, DAQC)){
 			if(channel >= 0 && channel <= 7)
+				return plate->tmp->scale[channel];
+		}else if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 8)
 				return plate->tmp->scale[channel - 1];
 		}
 	}
@@ -1083,10 +1176,10 @@ char getSCALE(struct piplate* plate, char channel){
 
 double getTEMP(struct piplate* plate, char channel){
 	if(plate->isValid){
-		if(compareWith(plate->id, 1, THERMO)){
-			if(!plate->tmp)
-				tempINIT(plate);
+		if(!plate->tmp)
+			tempINIT(plate);
 
+		if(compareWith(plate->id, 1, THERMO)){
 			if(channel >= 1 && channel <= 12){
 				int Tvals[2];
 				char* resp = sendCMD(plate, 0x70, channel - 1, 0, 4);
@@ -1179,6 +1272,28 @@ double getTEMP(struct piplate* plate, char channel){
 						temp = temp * 1.8 + 32.0;
 
 					temp = ((int) (temp * 1000)) / 1000.0;
+					return temp;
+				}
+			}
+		}else if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 8){
+				char* resp = sendCMD(plate, 0x71, (--channel), 0, 2);
+
+				if(resp){
+					int t = resp[0]*256 + resp[1];
+					double temp;
+					if(t > 0x8000){
+						t = t^0xFFFF;
+						t = -(t+1);
+					}
+					temp = t / 16.0;
+					if(plate->tmp->scale[channel] == KELVINS)
+						temp += 273.15;
+					if(plate->tmp->scale[channel] == FAHRENHEIT)
+						temp = temp * 1.8 + 32.0;
+
+					temp = ((int)(10000*temp))/10000.0;
+					sleep(.05);//Throttle value
 					return temp;
 				}
 			}
