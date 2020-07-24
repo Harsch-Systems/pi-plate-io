@@ -67,6 +67,11 @@ struct tempParams {
 	double calBias;
 };
 
+struct servoParams {
+	double servoLow;
+	double servoHigh;
+};
+
 struct DAQC2CalParams {
 	double calScale[8];
 	double calOffset[8];
@@ -84,6 +89,7 @@ struct piplate {
 	struct stepperMotorParams* stm;
 	struct dcMotorParams* dc;
 	struct tempParams* tmp;
+	struct servoParams* servo;
 	struct DAQC2CalParams* daqc2p;
 };
 
@@ -271,7 +277,7 @@ int	getTACHfine(struct piplate*, char);
 
 /* Start of Servo commands */
 
-void	setSERVO(struct piplate*, char, char);//TINKER
+void	setSERVO(struct piplate*, char, double);//TINKER
 void	setSERVO2(struct piplate*, char, double);//TINKER
 void	setSERVOlow(struct piplate*, double);//TINKER
 void	setSERVOhigh(struct piplate*, double);//TINKER

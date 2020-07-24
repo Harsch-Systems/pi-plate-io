@@ -3,16 +3,15 @@
 #include "plateio.h"
 
 void main(){
-	struct piplate plate = pi_plate_init(DAQC, 1);
+	struct piplate plate = pi_plate_init(TINKER, 5);
 
-	enableSWint(&plate);
-	intEnable(&plate);
+	setMODE(&plate, 8, "servo");
+	sleep(0.5);
 
 	while(1){
-		bool interrupt = getINT();
-		if(!interrupt){
-			printf("int: %f\n", interrupt);
-			printf("flags: %x\n", getINTflags(&plate));
-		}
+		setSERVO(&plate, 8, 0.0);
+		sleep(2);
+		setSERVO(&plate, 8, 180.0);
+		sleep(2);
 	}
 }

@@ -1701,22 +1701,89 @@ int getTACHfine(struct piplate* plate, char tachnum){
 
 /* End of motor sensor commands */
 
-/* Start of servo commands
+/* Start of servo commands */
+
+void servoINIT(struct piplate* plate){
+	plate->servo = (struct servoParams*)calloc(1, sizeof(struct servoParams));
+
+	plate->servo->servoLow = 0.6;
+	plate->servo->servoHigh = 2.35;
+}
 
 void setSERVO(struct piplate* plate, char servo, double angle){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(!plate->servo)
+				servoINIT(plate);
 
+			if(angle >= 0 && angle <= 180){
+				double clockDec;
+				int clockStart;
+
+				servo--;
+				clockDec = 1e-3*(plate->servo->servoLow + (plate->servo->servoHigh - plate->servo->servoLow)*(180-angle)/180.0);
+				clockDec = (int)((clockDec*49e6)/12.0);
+				clockStart = 65536-clockDec;
+				sendCMD(plate, 0x50+servo, (clockStart>>8), (clockStart&0xFF), 0);
+			}
+		}
+	}
 }
 
 void setSERVO2(struct piplate* plate, char servo, double pw){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(!plate->servo)
+				servoINIT(plate);
 
+			if(servo >= 1 && servo <= 8){
+				double clockDec;
+				int clockStart;
+				if(pw > 2.45)
+					pw = 2.45;
+				if(pw < 0.5)
+					pw = 0.5;
+				servo--;
+
+				clockDec=1e-3*pw;
+				clockDec=(int)((clockDec*49e6)/12.0);
+				clockStart = 65536-clockDec;
+				sendCMD(plate, 0x50+servo, (clockStart>>8), (clockStart&0xFF), 0);
+			}
+		}
+	}
 }
 
 void setSERVOlow(struct piplate* plate, double value){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(!plate->servo)
+				servoINIT(plate);
 
+			if(value > 2.45)
+				value = 2.45;
+			if(value < 0.5)
+				value = 0.5;
+
+			plate->servo->servoLow = value;
+		}
+	}
 }
 
 void setSERVOhigh(struct piplate* plate, double value){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(!plate->servo)
+				servoINIT(plate);
 
+			if(value > 2.45)
+				value = 2.45;
+			if(value < 0.5)
+				value = 0.5;
+
+			plate->servo->servoHigh = value;
+		}
+	}
 }
 
 /* End of servo commands */
