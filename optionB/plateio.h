@@ -20,6 +20,17 @@
 #define FAHRENHEIT 'f'
 #define KELVINS 'k'
 
+#define SINE 1
+#define TRIANGLE 2
+#define SQUARE 3
+#define SAWTOOTH_RISING 4
+#define SAWTOOTH_FALLING 5
+#define NOISE 6
+#define SINC 7
+
+#define CM 'c'
+#define IN 'i'
+
 struct oscilloscope {
 	bool c1State;
 	bool c2State;
@@ -57,6 +68,7 @@ struct DAQC2CalParams {
 	double calScale[8];
 	double calOffset[8];
 	double calDAC[8];
+	int pwm[2];
 };
 
 struct piplate {
@@ -219,7 +231,7 @@ extern void	setDAC(struct piplate*, char, double);
 
 /* Start of PWM and freq */
 
-extern void	setPWM(struct piplate*, char, char);
+extern void	setPWM(struct piplate*, char, int);
 extern int	getPWM(struct piplate*, char);
 
 extern double	getFREQ(struct piplate*);
@@ -238,7 +250,7 @@ void	fgLEVEL(struct piplate*, char, char);
 
 /* Start of switch commands */
 
-void	getSWstate(struct piplate*);
+bool	getSWstate(struct piplate*);
 void	enableSWint(struct piplate*);
 void	disableSWint(struct piplate*);
 void	enableSWpower(struct piplate*);
@@ -254,16 +266,21 @@ int	getTACHfine(struct piplate*, char);
 
 /* End of motorplate sensor commands */
 
+/* Start of Servo commands */
+
+void	setSERVO(struct piplate*, char, char);//TINKER
+void	setSERVO2(struct piplate*, char, double);//TINKER
+void	setSERVOlow(struct piplate*, double);//TINKER
+void	setSERVOhigh(struct piplate*, double);//TINKER
+
+/* End of Servo commands */
+
 /* Miscellaneous commands */
 
 double	getRANGE(struct piplate*, char, char);//DAQC, TINKER
 double	getRANGEfast(struct piplate*, char, char);//TINKER
 bool	getMOTION(struct piplate*, char);//TINKER
 double	getPOT(struct piplate*, char, double);//TINKER
-bool	getBUTTON(struct piplate*, char, char);//TINKER
-void	setSERVO(struct piplate*, char, char);//TINKER
-void	setSERVO2(struct piplate*, char, double);//TINKER
-void	setSERVOlow(struct piplate*, double);//TINKER
-void	setSERVOhigh(struct piplate*, double);//TINKER
+bool	getBUTTON(struct piplate*, char);//TINKER
 
 /* End of miscellaneous commands */

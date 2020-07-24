@@ -1462,8 +1462,8 @@ void setDAC(struct piplate* plate, char channel, double value){
 			if(value >= 0 && value <= 4.095 && (channel == 0 || channel == 1)){
 				double Vcc = getADC(plate, 8);
 				int v = (int)(value/Vcc * 1024);
-				char hibyte = value>>8;
-				char lobyte = value - (hibyte<<8);
+				char hibyte = v>>8;
+				char lobyte = v - (hibyte<<8);
 				sendCMD(plate, 0x40+channel, hibyte, lobyte, 0);
 			}
 		}else if(compareWith(plate->id, 1, DAQC2)){
@@ -1483,3 +1483,373 @@ void setDAC(struct piplate* plate, char channel, double value){
 }
 
 /* End of DAC functions */
+
+/* Start of PWM and FREQ commands */
+
+void setPWM(struct piplate* plate, char channel, int value){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 6 && value >= 0 && value <= 100){
+				int registerVal = (int) (value*1024.0/100.0 + 0.5);
+				char param1 = ((channel - 1) << 4)+(registerVal >> 8);
+				char param2 = registerVal & 0x00FF;
+				sendCMD(plate, 0xC0, param1, param2, 0);
+			}
+		}else if(compareWith(plate->id, 1, DAQC)){
+			if(value <= 1023 && value >= 0 && channel >= 0 && channel <= 1){
+				char hibyte = value>>8;
+				char lobyte = value - (hibyte<<8);
+				sendCMD(plate, 0x40+channel, hibyte, lobyte, 0);
+			}
+		}else if(compareWith(plate->id, 1, DAQC2)){
+			if(!plate->daqc2p)
+				daqc2pINIT(plate);
+
+			if(value >= 0 && value <= 100 && channel >= 0 && channel <= 1){
+				int registerVal = (int) (value*1023.0/100.0 + 0.5);
+				char param1 = (channel << 7) + (registerVal>>8);
+				char param2 = registerVal&0xFF;
+				sendCMD(plate, 0xC1, param1, param2, 0);
+				plate->daqc2p->pwm[channel] = value;
+			}
+		}
+	}
+}
+
+int getPWM(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			if(channel >= 0 && channel <= 1){
+				char* resp = sendCMD(plate, 0x40+channel+2, 0, 0, 2);
+
+				if(resp)
+					return (resp[0] * 256 + resp[1]);
+			}
+		}else if(compareWith(plate->id, 1, DAQC2)){
+			if(!plate->daqc2p)
+				daqc2pINIT(plate);
+
+			if(channel >= 0 && channel <= 1){
+				return plate->daqc2p->pwm[channel];
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+double getFREQ(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			double freq = 0;
+			char* resp1 = sendCMD(plate, 0xC0, 0, 0, 2);//First 2 bytes
+			char* resp2 = sendCMD(plate, 0xC0, 0, 0, 2);//Lower 2 bytes
+
+			if(resp1 && resp2){
+				int counts = (resp1[0]<<24) + (resp1[1]<<16) + (resp2[0]<<8) + resp2[1];
+				if(counts > 0)
+					freq = 6000000.0/counts;
+
+				return ((int)(freq*100))/100.0;
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+/* End of PWM and FREQ commands */
+
+/* Start of Function Generator commands */
+
+void fgON(struct piplate* plate, char chan){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(chan >= 1 && chan <= 4){
+				sendCMD(plate, 0x91, chan - 1, 0, 0);
+			}
+		}
+	}
+}
+
+void fgOFF(struct piplate* plate, char chan){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(chan >= 1 && chan <= 4){
+				sendCMD(plate, 0x90, chan - 1, 0, 0);
+			}
+		}
+	}
+}
+
+void fgFREQ(struct piplate* plate, char chan, int freq){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(chan >= 1 && chan <= 4 && freq >= 10 && freq <= 20000){
+				int phase_add = (int)(freq*65536.0/100000.0 + 0.5);
+				sendCMD(plate, 0x92 + chan - 1, phase_add>>8, phase_add&0xFF, 0);
+			}
+		}
+	}
+}
+
+void fgTYPE(struct piplate* plate, char chan, char type){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(chan >= 1 && chan <= 4 && type >= 1 && type <= 7){
+				sendCMD(plate, 0x96, chan-1, type-1, 0);
+			}
+		}
+	}
+}
+
+void fgLEVEL(struct piplate* plate, char chan, char level){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC2)){
+			if(chan >= 1 && chan <= 4 && level >= 1 && level <= 4){
+				sendCMD(plate, 0x97, chan-1, level, 0);
+			}
+		}
+	}
+}
+
+/* End of Function Generator commands */
+
+/* Start of DAQC switch commands */
+
+bool getSWstate(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			return safeExtract(sendCMD(plate, 0x50, 0, 0, 1));
+		}
+	}
+	return INVAL_CMD;
+}
+
+void enableSWint(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			sendCMD(plate, 0x51, 0, 0, 0);
+		}
+	}
+}
+
+void disableSWint(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			sendCMD(plate, 0x52, 0, 0, 0);
+		}
+	}
+}
+
+void enableSWpower(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			sendCMD(plate, 0x53, 0, 0, 0);
+		}
+	}
+}
+
+void disableSWpower(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, DAQC)){
+			sendCMD(plate, 0x54, 0, 0, 0);
+		}
+	}
+}
+
+/* End of DAQC switch commands */
+
+/* Start of motor sensor commands */
+
+char getSENSORS(struct piplate* plate){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			return safeExtract(sendCMD(plate, 0x20, 0, 0, 1));
+		}
+	}
+	return INVAL_CMD;
+}
+
+int getTACHcoarse(struct piplate* plate, char tachnum){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(tachnum >= 1 && tachnum <= 4){
+				char* resp = sendCMD(plate, 0x22, tachnum, 0, 2);
+
+				if(resp){
+					return (resp[0]*256 + resp[1]);
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+int getTACHfine(struct piplate* plate, char tachnum){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, MOTOR)){
+			if(tachnum >= 1 && tachnum <= 4){
+				char* resp = sendCMD(plate, 0x23, tachnum, 0, 2);
+
+				if(resp){
+					return (resp[0]*256 + resp[1]);
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+/* End of motor sensor commands */
+
+/* Start of servo commands
+
+void setSERVO(struct piplate* plate, char servo, double angle){
+
+}
+
+void setSERVO2(struct piplate* plate, char servo, double pw){
+
+}
+
+void setSERVOlow(struct piplate* plate, double value){
+
+}
+
+void setSERVOhigh(struct piplate* plate, double value){
+
+}
+
+/* End of servo commands */
+
+/* Start of miscellaneous commands */
+
+double changeUnits(double value, char units){
+	if(units == CM)
+		value /= 58.326;
+	if(units == IN)
+		value /= 148.148;
+
+	value = ((int)(100*value))/100.0;
+	return value;
+}
+
+double getRANGE(struct piplate* plate, char channel, char units){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if((channel == 12 || channel == 34 || channel == 56 || channel == 78) && (units == CM || units == IN)){
+				channel=(int)((channel>>1)/10);//Map channel to be from 0 to 3
+				char* resp = sendCMD(plate, 0x81, channel, 0, 2);
+
+				if(resp){
+					int r = resp[0] * 256 + resp[1];
+					double range;
+					if(r == 0){
+						printf("ERROR: Sensor Failure\n");
+						return INVAL_CMD;
+					}
+					range = (r<<1)*12.0/49.0;
+
+					return changeUnits(range, units);
+				}
+			}
+		}else if(compareWith(plate->id, 1, DAQC)){
+			if(channel >= 0 && channel <= 6 && (units == CM || units == IN)){
+				char* resp;
+				sendCMD(plate, 0x80, channel, 0, 0);//Initate measurement
+				sleep(0.07);
+				resp = sendCMD(plate, 0x81, channel, 0, 2);//Get data
+
+				if(resp){
+					double range = resp[0]*256 + resp[1];
+					if(range == 0){
+						printf("ERROR: Sensor Failure\n");
+						return INVAL_CMD;
+					}
+
+					return changeUnits(range, units);
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+double getRANGEfast(struct piplate* plate, char channel, char units){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if((channel == 12 || channel == 34 || channel == 56 || channel == 78) && (units == CM || units == IN)){
+				channel=(channel>>1)/10;//Map values to be from 0 to 3.
+				char* resp = sendCMD(plate, 0x82, channel, 0, 2);
+
+				if(resp){
+					int r = resp[0] * 256 + resp[1];
+					double range;
+
+					if(range == 0){
+						printf("ERROR: Sensor Failure\n");
+						return INVAL_CMD;
+					}
+					range = (r<<1)*12.0/49.0;
+
+					return changeUnits(range, units);
+				}
+			}
+		}
+	}
+}
+
+bool getMOTION(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 4){
+				char* resp = sendCMD(plate, 0x30, (--channel), 0, 2);
+
+				if(resp){
+					double val = resp[0] * 256 + resp[1];
+					val = val * 5.10 * 2.4 / 4095.0;
+					sleep(0.05);//Necessary throttle on this function to allow plate's motion buffer to refill
+					if(val >= 2.5)
+						return 1;
+					return 0;
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+double getPOT(struct piplate* plate, char channel, double range){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 4 && range <= 12){
+				double max = (range >= 0 ? range : 5.0);
+				char* resp = sendCMD(plate, 0x30, channel - 1, 0, 2);
+
+				if(resp){
+					double val = resp[0]*256 + resp[1];
+					val = val * 5.10 * 2.4 / 4095.0;
+					val = ((int)(1000*(100*val/max)))/1000.0;
+					if(val > 100.0)
+						val = 100.0;
+
+					return val;
+				}
+			}
+		}
+	}
+	return INVAL_CMD;
+}
+
+bool getBUTTON(struct piplate* plate, char channel){
+	if(plate->isValid){
+		if(compareWith(plate->id, 1, TINKER)){
+			if(channel >= 1 && channel <= 8){
+				char* resp = sendCMD(plate, 0x2A, (--channel), 0, 1);
+				sleep(0.05);
+				return safeExtract(resp);
+			}
+		}
+	}
+}
+
+/* End of miscellaneous commands */
