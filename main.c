@@ -1,12 +1,17 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include "plateio.h"
 
 void main(){
-	struct piplate plate = pi_plate_init(RELAY, 0);
+	struct piplate plate = pi_plate_init(THERMO, 3);
 
-	while(1){
-		printf("addr: %s\n", getID(&plate));
+	int i = 1;
+	while(i){
+		char* id = getID(&plate);
+		printf("id: %s\n", id);
+		if(strcmp(id, "Pi-Plate THERMOplate"))
+			i = 0;
 	}
 /*
 	struct piplate plate = pi_plate_init(TINKER, 5);

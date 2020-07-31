@@ -6,7 +6,7 @@
 #include <math.h>
 #include <unistd.h>
 
-#include "../../pi-plate-module/module/piplate.h"
+#include "../pi-plate-module/module/piplate.h"
 #include "plateio.h"
 
 #define INVAL_CMD -1
